@@ -30,6 +30,8 @@ export async function sendWithHumanDelay(params: {
   text: string;
   conversationId?: string;
   skipDelay?: boolean;
+  skipPersist?: boolean;
+  sentBy?: "ia" | "human" | "system";
 }) {
   const workspace = await getWorkspace(params.workspaceId);
   if (!workspace) return;
@@ -65,6 +67,8 @@ export async function sendWithHumanDelay(params: {
     throw new Error("Nenhum canal WhatsApp configurado para este workspace");
   }
 
+  if (params.skipPersist) return;
+
   const supabase = createAdminClient();
   await supabase.from("whatsapp_messages").insert({
     workspace_id: params.workspaceId,
@@ -72,6 +76,7 @@ export async function sendWithHumanDelay(params: {
     from_me: true,
     body: params.text,
     type: "text",
-    ai_handled: true,
+    sent_by: params.sentBy ?? "ia",
+    ai_handled: (params.sentBy ?? "ia") === "ia",
   } as never);
 }

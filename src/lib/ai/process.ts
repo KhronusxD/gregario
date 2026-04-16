@@ -11,6 +11,7 @@ type ConversationRow = {
   workspace_id: string;
   phone: string;
   ia_active: boolean;
+  __created?: boolean;
 };
 
 export async function getOrCreateConversation(params: {
@@ -40,7 +41,7 @@ export async function getOrCreateConversation(params: {
     .single();
 
   if (error || !created) throw new Error(`createConversation failed: ${error?.message}`);
-  return created as ConversationRow;
+  return { ...(created as ConversationRow), __created: true };
 }
 
 export async function recordInboundMessage(params: {
@@ -48,19 +49,31 @@ export async function recordInboundMessage(params: {
   conversationId: string;
   body: string;
   type?: string;
-}) {
+  mediaUrl?: string;
+  mediaType?: string;
+  whatsappMsgId?: string;
+}): Promise<string | null> {
   const supabase = createAdminClient();
-  await supabase.from("whatsapp_messages").insert({
-    workspace_id: params.workspaceId,
-    conversation_id: params.conversationId,
-    from_me: false,
-    body: params.body,
-    type: params.type ?? "text",
-  } as never);
+  const { data } = await supabase
+    .from("whatsapp_messages")
+    .insert({
+      workspace_id: params.workspaceId,
+      conversation_id: params.conversationId,
+      from_me: false,
+      body: params.body,
+      type: params.type ?? "text",
+      sent_by: "member",
+      media_url: params.mediaUrl ?? null,
+      media_type: params.mediaType ?? null,
+      whatsapp_msg_id: params.whatsappMsgId ?? null,
+    } as never)
+    .select("id")
+    .single();
   await supabase
     .from("whatsapp_conversations")
     .update({ last_message_at: new Date().toISOString() } as never)
     .eq("id", params.conversationId);
+  return (data as { id: string } | null)?.id ?? null;
 }
 
 export async function processConversation(params: {

@@ -2,6 +2,8 @@ import { PageHeader } from "@/components/admin/PageHeader";
 import { requireWorkspace } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
 import { initials, formatPhone } from "@/lib/members";
+import { OperatorComposer } from "@/components/whatsapp/OperatorComposer";
+import { ConversationControls } from "@/components/whatsapp/ConversationControls";
 
 const TABS = [
   { value: "human", label: "Aguardando" },
@@ -132,9 +134,12 @@ export default async function WhatsAppPage({
                   </p>
                   <p className="font-sans text-xs text-forest-green/60">{formatPhone(active.phone)}</p>
                 </div>
-                <span className="rounded-full bg-forest-green/10 px-3 py-1 font-display text-[10px] font-bold uppercase tracking-widest text-forest-green/70">
-                  {active.status}
-                </span>
+                <div className="flex items-center gap-3">
+                  <span className="rounded-full bg-forest-green/10 px-3 py-1 font-display text-[10px] font-bold uppercase tracking-widest text-forest-green/70">
+                    {active.status}
+                  </span>
+                  <ConversationControls conversationId={active.id} status={active.status} />
+                </div>
               </header>
               <div className="flex-1 space-y-3 overflow-y-auto bg-surface p-6">
                 {messages.length === 0 ? (
@@ -162,20 +167,7 @@ export default async function WhatsAppPage({
                   ))
                 )}
               </div>
-              <form className="flex gap-2 border-t border-forest-green/5 p-4">
-                <input
-                  disabled
-                  placeholder="Responder (envio manual em breve)..."
-                  className="flex-1 rounded-full bg-forest-green/[0.04] px-4 py-2.5 font-sans text-sm text-forest-green disabled:cursor-not-allowed"
-                />
-                <button
-                  type="submit"
-                  disabled
-                  className="rounded-full bg-forest-green px-5 py-2.5 font-display text-xs font-bold text-card opacity-50"
-                >
-                  Enviar
-                </button>
-              </form>
+              <OperatorComposer conversationId={active.id} />
             </>
           )}
         </section>

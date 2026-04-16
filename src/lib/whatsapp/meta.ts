@@ -58,7 +58,7 @@ export type NormalizedInboundMessage = {
   timestamp: number;
 };
 
-export function extractMetaMessage(payload: unknown): NormalizedInboundMessage | null {
+export function extractMetaMessage(payload: unknown): (NormalizedInboundMessage & { mediaId?: string; mimeType?: string; caption?: string }) | null {
   const p = payload as {
     entry?: Array<{
       changes?: Array<{
@@ -70,6 +70,8 @@ export function extractMetaMessage(payload: unknown): NormalizedInboundMessage |
             type: string;
             timestamp: string;
             text?: { body?: string };
+            image?: { id: string; mime_type?: string; caption?: string };
+            audio?: { id: string; mime_type?: string };
           }>;
         };
       }>;
@@ -88,13 +90,21 @@ export function extractMetaMessage(payload: unknown): NormalizedInboundMessage |
     document: "document",
   };
 
+  const type = typeMap[msg.type] ?? "other";
+  const mediaId = type === "image" ? msg.image?.id : type === "audio" ? msg.audio?.id : undefined;
+  const mimeType = type === "image" ? msg.image?.mime_type : type === "audio" ? msg.audio?.mime_type : undefined;
+  const caption = msg.image?.caption;
+
   return {
     provider: "meta",
     phoneNumberId,
     from: msg.from,
     messageId: msg.id,
-    body: msg.text?.body ?? "",
-    type: typeMap[msg.type] ?? "other",
+    body: msg.text?.body ?? caption ?? "",
+    type,
     timestamp: Number(msg.timestamp) * 1000,
+    mediaId,
+    mimeType,
+    caption,
   };
 }

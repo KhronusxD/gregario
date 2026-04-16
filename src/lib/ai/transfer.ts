@@ -30,3 +30,11 @@ export async function pauseAI(params: { conversationId: string }) {
     .update({ status: "human", ia_active: false } as never)
     .eq("id", params.conversationId);
 }
+
+export async function resumeAI(params: { conversationId: string }) {
+  const supabase = createAdminClient();
+  await supabase
+    .from("whatsapp_conversations")
+    .update({ status: "bot", ia_active: true } as never)
+    .eq("id", params.conversationId);
+}

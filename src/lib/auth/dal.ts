@@ -32,7 +32,7 @@ export const getWorkspaceContext = cache(async () => {
   const { data } = await supabase
     .from("workspace_users")
     .select(
-      "role, workspaces!inner(id, slug, name, denomination, logo_url, plan, trial_ends_at, plan_status)",
+      "role, workspaces!inner(id, slug, name, denomination, logo_url, plan, trial_ends_at, plan_status, ia_active, whatsapp_active)",
     )
     .eq("user_id", user.id)
     .limit(1)
