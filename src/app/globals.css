@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+@theme inline {
+  /* Brand colors */
+  --color-forest-green: #1a4731;
+  --color-action-green: #2d7a4f;
+  --color-accent-green: #4caf76;
+  --color-surface: #f8f7f4;
+  --color-card: #ffffff;
+
+  /* Fonts (values injected by next/font via <html> className) */
+  --font-display: var(--font-manrope);
+  --font-sans: var(--font-inter);
+
+  /* Border radius */
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 20px;
+  --radius-full: 9999px;
+
+  /* Shadows — only one, per design system no-line rule */
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+body {
+  background: var(--color-surface);
+  color: #1a1c1a;
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
