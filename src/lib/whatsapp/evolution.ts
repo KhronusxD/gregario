@@ -60,7 +60,83 @@ export async function getInstanceQr(instanceName: string) {
   if (!BASE || !KEY) throw new Error("Evolution API não configurada");
   const res = await fetch(`${BASE}/instance/connect/${instanceName}`, {
     headers: { apikey: KEY },
+    cache: "no-store",
   });
   if (!res.ok) throw new Error(`instanceQr failed: ${res.status}`);
-  return res.json() as Promise<{ base64?: string; code?: string }>;
+  return res.json() as Promise<{ base64?: string; code?: string; pairingCode?: string }>;
+}
+
+export type EvolutionConnectionState = "open" | "connecting" | "close" | "unknown";
+
+export async function getInstanceStatus(instanceName: string): Promise<{
+  state: EvolutionConnectionState;
+  number?: string;
+}> {
+  if (!BASE || !KEY) throw new Error("Evolution API não configurada");
+  const res = await fetch(`${BASE}/instance/connectionState/${instanceName}`, {
+    headers: { apikey: KEY },
+    cache: "no-store",
+  });
+  if (!res.ok) return { state: "unknown" };
+  const json = (await res.json()) as { instance?: { state?: string; number?: string }; state?: string };
+  const raw = json.instance?.state ?? json.state ?? "unknown";
+  const state: EvolutionConnectionState =
+    raw === "open" || raw === "connecting" || raw === "close" ? raw : "unknown";
+  return { state, number: json.instance?.number };
+}
+
+export async function fetchInstanceInfo(instanceName: string): Promise<{
+  number?: string;
+  profileName?: string;
+  profilePictureUrl?: string;
+} | null> {
+  if (!BASE || !KEY) return null;
+  const res = await fetch(`${BASE}/instance/fetchInstances?instanceName=${encodeURIComponent(instanceName)}`, {
+    headers: { apikey: KEY },
+    cache: "no-store",
+  });
+  if (!res.ok) return null;
+  const json = (await res.json()) as Array<{
+    instance?: { owner?: string; profileName?: string; profilePictureUrl?: string };
+  }>;
+  const inst = Array.isArray(json) ? json[0]?.instance : null;
+  if (!inst) return null;
+  return {
+    number: inst.owner?.replace(/@.*/, ""),
+    profileName: inst.profileName,
+    profilePictureUrl: inst.profilePictureUrl,
+  };
+}
+
+export async function logoutInstance(instanceName: string): Promise<void> {
+  if (!BASE || !KEY) throw new Error("Evolution API não configurada");
+  const res = await fetch(`${BASE}/instance/logout/${instanceName}`, {
+    method: "DELETE",
+    headers: { apikey: KEY },
+  });
+  if (!res.ok && res.status !== 404) {
+    throw new Error(`logoutInstance failed: ${res.status} ${await res.text()}`);
+  }
+}
+
+export async function deleteInstance(instanceName: string): Promise<void> {
+  if (!BASE || !KEY) throw new Error("Evolution API não configurada");
+  const res = await fetch(`${BASE}/instance/delete/${instanceName}`, {
+    method: "DELETE",
+    headers: { apikey: KEY },
+  });
+  if (!res.ok && res.status !== 404) {
+    throw new Error(`deleteInstance failed: ${res.status} ${await res.text()}`);
+  }
+}
+
+export async function restartInstance(instanceName: string): Promise<void> {
+  if (!BASE || !KEY) throw new Error("Evolution API não configurada");
+  const res = await fetch(`${BASE}/instance/restart/${instanceName}`, {
+    method: "PUT",
+    headers: { apikey: KEY },
+  });
+  if (!res.ok && res.status !== 404) {
+    throw new Error(`restartInstance failed: ${res.status} ${await res.text()}`);
+  }
 }

@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { PageHeader } from "@/components/admin/PageHeader";
 import { requireWorkspace } from "@/lib/auth/dal";
 
 export default async function SettingsPage() {
@@ -9,48 +8,29 @@ export default async function SettingsPage() {
     : "—";
 
   return (
-    <main className="ml-64 max-w-4xl p-10">
-      <PageHeader
-        eyebrow="Administração"
-        title="Configurações"
-        description="Identidade da igreja, conexão do WhatsApp, equipe e plano."
-      />
-
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card title="Igreja">
-          <Row k="Nome" v={ctx.workspace.name} />
-          <Row k="Slug (link do app)" v={`/${ctx.workspace.slug}`} />
-          <Row k="Denominação" v={ctx.workspace.denomination ?? "—"} />
-        </Card>
-        <Card title="Plano">
-          <Row k="Plano" v={ctx.workspace.plan ?? "essencial"} />
-          <Row k="Status" v={ctx.workspace.plan_status ?? "—"} />
-          <Row k="Fim do trial" v={trialEnd} />
-          <Link
-            href="/dashboard/billing"
-            className="mt-4 inline-block rounded-full bg-forest-green/[0.06] px-4 py-2 font-display text-xs font-bold text-forest-green hover:bg-forest-green/[0.1]"
-          >
-            Gerenciar assinatura
-          </Link>
-        </Card>
-        <Card title="WhatsApp">
-          <p className="font-sans text-sm text-forest-green/70">
-            Conecte a instância da Evolution API para ativar a secretaria IA.
-          </p>
-          <Link
-            href="/onboarding"
-            className="mt-4 inline-block rounded-full bg-forest-green/[0.06] px-4 py-2 font-display text-xs font-bold text-forest-green hover:bg-forest-green/[0.1]"
-          >
-            Abrir onboarding guiado
-          </Link>
-        </Card>
-        <Card title="Equipe">
-          <p className="font-sans text-sm text-forest-green/70">
-            Convide pastores, secretaria, tesoureiro e líderes. Em breve aqui.
-          </p>
-        </Card>
-      </div>
-    </main>
+    <div className="grid gap-6 md:grid-cols-2">
+      <Card title="Igreja">
+        <Row k="Nome" v={ctx.workspace.name} />
+        <Row k="Slug (link do app)" v={`/${ctx.workspace.slug}`} />
+        <Row k="Denominação" v={ctx.workspace.denomination ?? "—"} />
+      </Card>
+      <Card title="Plano">
+        <Row k="Plano" v={ctx.workspace.plan ?? "essencial"} />
+        <Row k="Status" v={ctx.workspace.plan_status ?? "—"} />
+        <Row k="Fim do trial" v={trialEnd} />
+        <Link
+          href="/dashboard/billing"
+          className="mt-4 inline-block rounded-full bg-forest-green/[0.06] px-4 py-2 font-display text-xs font-bold text-forest-green hover:bg-forest-green/[0.1]"
+        >
+          Gerenciar assinatura
+        </Link>
+      </Card>
+      <Card title="Equipe">
+        <p className="font-sans text-sm text-forest-green/70">
+          Convide pastores, secretaria, tesoureiro e líderes. Em breve aqui.
+        </p>
+      </Card>
+    </div>
   );
 }
 
