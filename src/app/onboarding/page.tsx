@@ -20,25 +20,35 @@ export default function ChurchDataStep() {
         </p>
       </header>
       <form action={action} className="space-y-5 rounded-lg bg-card p-8 shadow-card">
-        <Text label="Nome da igreja" name="name" required />
-        <Text label="Denominação" name="denomination" />
-        <Text label="Endereço completo" name="address" />
+        <Text label="Nome da igreja" name="name" required defaultValue={state?.values?.name} />
+        <Text label="Denominação" name="denomination" defaultValue={state?.values?.denomination} />
+        <Text label="Endereço completo" name="address" defaultValue={state?.values?.address} />
         <div className="grid gap-5 md:grid-cols-2">
-          <Text label="Telefone da secretaria" name="phone" type="tel" />
-          <Text label="WhatsApp do pastor titular" name="pastor_phone" type="tel" />
+          <Text label="Telefone da secretaria" name="phone" type="tel" defaultValue={state?.values?.phone} />
+          <Text label="WhatsApp do pastor titular" name="pastor_phone" type="tel" defaultValue={state?.values?.pastor_phone} />
         </div>
         <Area
           label="Horários de culto"
           name="service_schedule"
           placeholder="Ex: Dom 9h e 19h, Qua 19h30"
+          defaultValue={state?.values?.service_schedule}
         />
         <Area
           label="Frase de boas-vindas (app do membro)"
           name="welcome_message"
           placeholder='Ex: "Que bom ter você aqui na Batista Central!"'
+          defaultValue={state?.values?.welcome_message}
         />
         {state?.message ? (
           <p className="rounded-sm bg-red-50 px-3 py-2 font-sans text-sm text-red-700">{state.message}</p>
+        ) : null}
+        {state?.errors ? (
+          <p className="rounded-sm bg-red-50 px-3 py-2 font-sans text-sm text-red-700">
+            Verifique os campos destacados:{" "}
+            {Object.entries(state.errors)
+              .flatMap(([k, v]) => v.map((msg) => `${k}: ${msg}`))
+              .join(" · ")}
+          </p>
         ) : null}
         <button
           type="submit"
@@ -57,11 +67,13 @@ function Text({
   name,
   type = "text",
   required,
+  defaultValue,
 }: {
   label: string;
   name: string;
   type?: string;
   required?: boolean;
+  defaultValue?: string;
 }) {
   return (
     <div>
@@ -70,6 +82,7 @@ function Text({
         name={name}
         type={type}
         required={required}
+        defaultValue={defaultValue}
         className="mt-2 w-full rounded-sm border border-forest-green/10 bg-surface px-4 py-3 font-sans text-sm text-forest-green"
       />
     </div>
@@ -80,10 +93,12 @@ function Area({
   label,
   name,
   placeholder,
+  defaultValue,
 }: {
   label: string;
   name: string;
   placeholder?: string;
+  defaultValue?: string;
 }) {
   return (
     <div>
@@ -92,6 +107,7 @@ function Area({
         name={name}
         rows={2}
         placeholder={placeholder}
+        defaultValue={defaultValue}
         className="mt-2 w-full rounded-sm border border-forest-green/10 bg-surface px-4 py-3 font-sans text-sm text-forest-green"
       />
     </div>

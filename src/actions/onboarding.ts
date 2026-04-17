@@ -4,7 +4,6 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth/dal";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createEvolutionInstance, getInstanceQr } from "@/lib/whatsapp/evolution";
 
@@ -19,8 +18,24 @@ const ChurchSchema = z.object({
   primary_color: z.string().optional().or(z.literal("")),
 });
 
+export type OnboardingChurchValues = {
+  name?: string;
+  denomination?: string;
+  address?: string;
+  phone?: string;
+  service_schedule?: string;
+  pastor_phone?: string;
+  welcome_message?: string;
+  primary_color?: string;
+};
+
 export type OnboardingState =
-  | { errors?: Record<string, string[]>; message?: string; ok?: boolean }
+  | {
+      errors?: Record<string, string[]>;
+      message?: string;
+      ok?: boolean;
+      values?: OnboardingChurchValues;
+    }
   | undefined;
 
 export async function saveChurchStep(
@@ -28,20 +43,23 @@ export async function saveChurchStep(
   formData: FormData,
 ): Promise<OnboardingState> {
   const ctx = await requireRole(["admin"]);
-  const parsed = ChurchSchema.safeParse({
-    name: formData.get("name"),
-    denomination: formData.get("denomination"),
-    address: formData.get("address"),
-    phone: formData.get("phone"),
-    service_schedule: formData.get("service_schedule"),
-    pastor_phone: formData.get("pastor_phone"),
-    welcome_message: formData.get("welcome_message"),
-    primary_color: formData.get("primary_color"),
-  });
-  if (!parsed.success) return { errors: z.flattenError(parsed.error).fieldErrors };
+  const values: OnboardingChurchValues = {
+    name: (formData.get("name") as string) ?? "",
+    denomination: (formData.get("denomination") as string) ?? "",
+    address: (formData.get("address") as string) ?? "",
+    phone: (formData.get("phone") as string) ?? "",
+    service_schedule: (formData.get("service_schedule") as string) ?? "",
+    pastor_phone: (formData.get("pastor_phone") as string) ?? "",
+    welcome_message: (formData.get("welcome_message") as string) ?? "",
+    primary_color: (formData.get("primary_color") as string) ?? "",
+  };
+  const parsed = ChurchSchema.safeParse(values);
+  if (!parsed.success) {
+    return { errors: z.flattenError(parsed.error).fieldErrors, values };
+  }
 
-  const supabase = await createClient();
-  const { error } = await supabase
+  const admin = createAdminClient();
+  const { error } = await admin
     .from("workspaces")
     .update({
       name: parsed.data.name,
@@ -53,9 +71,9 @@ export async function saveChurchStep(
       welcome_message: parsed.data.welcome_message || null,
       primary_color: parsed.data.primary_color || null,
       onboarding_step: 2,
-    })
+    } as never)
     .eq("id", ctx.workspace.id);
-  if (error) return { message: error.message };
+  if (error) return { message: error.message, values };
 
   revalidatePath("/onboarding");
   redirect("/onboarding/faq");
@@ -111,8 +129,11 @@ export async function connectWhatsappStep(): Promise<OnboardingState> {
 
 export async function skipWhatsappStep() {
   const ctx = await requireRole(["admin"]);
-  const supabase = await createClient();
-  await supabase.from("workspaces").update({ onboarding_step: 4 }).eq("id", ctx.workspace.id);
+  const admin = createAdminClient();
+  await admin
+    .from("workspaces")
+    .update({ onboarding_step: 4 } as never)
+    .eq("id", ctx.workspace.id);
   redirect("/onboarding/members");
 }
 
@@ -126,8 +147,11 @@ export async function importMembersStep(
   const raw = (formData.get("csv") ?? "") as string;
   const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   if (lines.length === 0) {
-    const supabase = await createClient();
-    await supabase.from("workspaces").update({ onboarding_step: 5 }).eq("id", ctx.workspace.id);
+    const admin = createAdminClient();
+    await admin
+      .from("workspaces")
+      .update({ onboarding_step: 5 } as never)
+      .eq("id", ctx.workspace.id);
     redirect("/onboarding/done");
   }
 
@@ -144,9 +168,9 @@ export async function importMembersStep(
     });
   }
 
+  const admin = createAdminClient();
   if (rows.length > 0) {
-    const supabase = await createClient();
-    await supabase.from("members").insert(
+    await admin.from("members").insert(
       rows.map((r) => ({
         workspace_id: ctx.workspace.id,
         name: r.name,
@@ -157,17 +181,22 @@ export async function importMembersStep(
     );
   }
 
-  const supabase = await createClient();
-  await supabase.from("workspaces").update({ onboarding_step: 5 }).eq("id", ctx.workspace.id);
+  await admin
+    .from("workspaces")
+    .update({ onboarding_step: 5 } as never)
+    .eq("id", ctx.workspace.id);
   redirect("/onboarding/done");
 }
 
 export async function finishOnboarding() {
   const ctx = await requireRole(["admin"]);
-  const supabase = await createClient();
-  await supabase
+  const admin = createAdminClient();
+  await admin
     .from("workspaces")
-    .update({ onboarding_completed_at: new Date().toISOString(), onboarding_step: 99 })
+    .update({
+      onboarding_completed_at: new Date().toISOString(),
+      onboarding_step: 99,
+    } as never)
     .eq("id", ctx.workspace.id);
   redirect("/dashboard");
 }
