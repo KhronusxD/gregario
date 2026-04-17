@@ -35,6 +35,10 @@ export type OnboardingState =
       message?: string;
       ok?: boolean;
       values?: OnboardingChurchValues;
+      qr?: {
+        base64: string | null;
+        pairingCode: string | null;
+      };
     }
   | undefined;
 
@@ -115,16 +119,39 @@ export async function connectWhatsappStep(): Promise<OnboardingState> {
 
   const instanceName = `ws_${ctx.workspace.slug}`;
   try {
-    await createEvolutionInstance(instanceName);
+    try {
+      await createEvolutionInstance(instanceName);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      // Se já existe, segue pro QR normalmente
+      if (!/already|exists|409/i.test(msg)) throw e;
+    }
     const qr = await getInstanceQr(instanceName);
     await admin
       .from("workspaces")
-      .update({ evolution_instance: instanceName, onboarding_step: 3 })
+      .update({ evolution_instance: instanceName, onboarding_step: 3 } as never)
       .eq("id", ctx.workspace.id);
-    return { ok: true, message: qr.base64 ? "QR gerado — escaneie no WhatsApp." : "Instância criada." };
+    return {
+      ok: true,
+      message: qr.base64 ? "Escaneie o QR Code no WhatsApp." : "Instância criada.",
+      qr: {
+        base64: qr.base64 ?? null,
+        pairingCode: qr.pairingCode ?? qr.code ?? null,
+      },
+    };
   } catch (e) {
     return { message: e instanceof Error ? e.message : "Falha ao conectar." };
   }
+}
+
+export async function completeWhatsappStep() {
+  const ctx = await requireRole(["admin"]);
+  const admin = createAdminClient();
+  await admin
+    .from("workspaces")
+    .update({ onboarding_step: 4, whatsapp_active: true } as never)
+    .eq("id", ctx.workspace.id);
+  redirect("/onboarding/members");
 }
 
 export async function skipWhatsappStep() {

@@ -1,14 +1,20 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { connectWhatsappStep, skipWhatsappStep, type OnboardingState } from "@/actions/onboarding";
 import { Stepper } from "@/components/onboarding/Stepper";
+import { WhatsappConnectModal } from "@/components/onboarding/WhatsappConnectModal";
 
 export default function WhatsAppConnectStep() {
   const [state, action, pending] = useActionState<OnboardingState, FormData>(
     async () => connectWhatsappStep(),
     undefined,
   );
+  const [showModal, setShowModal] = useState(false);
+
+  useEffect(() => {
+    if (state?.ok && state.qr) setShowModal(true);
+  }, [state]);
 
   return (
     <>
@@ -36,16 +42,17 @@ export default function WhatsAppConnectStep() {
             disabled={pending}
             className="rounded-full bg-gradient-to-br from-forest-green to-action-green px-6 py-3 font-display text-sm font-bold text-card active:scale-95 disabled:opacity-60"
           >
-            {pending ? "Gerando..." : "Gerar instância"}
+            {pending ? "Gerando..." : state?.ok ? "Reabrir QR Code" : "Gerar instância"}
           </button>
         </form>
 
-        {state?.message ? (
-          <p
-            className={`rounded-sm px-3 py-2 font-sans text-sm ${
-              state.ok ? "bg-accent-green/20 text-forest-green" : "bg-red-50 text-red-700"
-            }`}
-          >
+        {state?.message && !state.ok ? (
+          <p className="rounded-sm bg-red-50 px-3 py-2 font-sans text-sm text-red-700">
+            {state.message}
+          </p>
+        ) : null}
+        {state?.ok ? (
+          <p className="rounded-sm bg-accent-green/20 px-3 py-2 font-sans text-sm text-forest-green">
             {state.message}
           </p>
         ) : null}
@@ -56,6 +63,13 @@ export default function WhatsAppConnectStep() {
           Pular e conectar depois →
         </button>
       </form>
+
+      {showModal && state?.qr ? (
+        <WhatsappConnectModal
+          initialQr={state.qr}
+          onClose={() => setShowModal(false)}
+        />
+      ) : null}
     </>
   );
 }
