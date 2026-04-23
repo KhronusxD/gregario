@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { initials, formatPhone } from "@/lib/members";
 import { OperatorComposer } from "@/components/whatsapp/OperatorComposer";
 import { ConversationControls } from "@/components/whatsapp/ConversationControls";
+import { ChannelStatusBadge } from "@/components/whatsapp/ChannelStatusBadge";
+import { MessageBubble } from "@/components/whatsapp/MessageBubble";
 
 const TABS = [
   { value: "human", label: "Aguardando" },
@@ -43,33 +45,42 @@ export default async function WhatsAppPage({
   const activeId = c ?? list[0]?.id ?? null;
   const active = list.find((x) => x.id === activeId);
 
-  let messages: Array<{
+  type Msg = {
     id: string;
-    sender: string;
+    sent_by: "member" | "human" | "ia" | "system" | null;
     body: string | null;
+    type: string | null;
+    media_url: string | null;
+    media_type: string | null;
+    transcription: string | null;
+    ai_analysis: string | null;
     created_at: string;
-  }> = [];
+  };
+  let messages: Msg[] = [];
   if (active) {
     const { data } = await supabase
       .from("whatsapp_messages")
-      .select("id, sender, body, created_at")
+      .select("id, sent_by, body, type, media_url, media_type, transcription, ai_analysis, created_at")
       .eq("conversation_id", active.id)
       .order("created_at", { ascending: true })
       .limit(200);
-    messages = (data ?? []) as typeof messages;
+    messages = (data ?? []) as Msg[];
   }
 
   const activeMember = active ? (Array.isArray(active.member) ? active.member[0] : active.member) : null;
 
   return (
     <main className="ml-64 min-h-[calc(100vh-5rem)] p-10">
-      <PageHeader
-        eyebrow="Atendimento"
-        title="Secretaria WhatsApp"
-        description="Conversas atendidas pela IA e pela equipe. Três colunas: lista, chat e contexto do membro."
-      />
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <PageHeader
+          eyebrow="Atendimento"
+          title="Secretaria WhatsApp"
+          description="Conversas atendidas pela IA e pela equipe. Três colunas: lista, chat e contexto do membro."
+        />
+        <ChannelStatusBadge />
+      </div>
 
-      <div className="grid h-[calc(100vh-16rem)] grid-cols-[320px_1fr_300px] gap-4 rounded-lg bg-card shadow-card">
+      <div className="grid h-[calc(100vh-18rem)] grid-cols-[320px_1fr_300px] gap-4 rounded-lg bg-card shadow-card">
         {/* Column 1: list */}
         <aside className="flex flex-col border-r border-forest-green/5">
           <div className="flex gap-2 border-b border-forest-green/5 p-4">
@@ -145,26 +156,7 @@ export default async function WhatsAppPage({
                 {messages.length === 0 ? (
                   <p className="font-sans text-sm text-forest-green/50">Sem mensagens.</p>
                 ) : (
-                  messages.map((m) => (
-                    <div
-                      key={m.id}
-                      className={`flex ${m.sender === "member" ? "justify-start" : "justify-end"}`}
-                    >
-                      <div
-                        className={`max-w-[70%] rounded-lg px-4 py-2 font-sans text-sm ${
-                          m.sender === "member"
-                            ? "bg-card text-forest-green shadow-card"
-                            : "bg-gradient-to-br from-forest-green to-action-green text-card"
-                        }`}
-                      >
-                        <p className="whitespace-pre-wrap">{m.body ?? ""}</p>
-                        <p className={`mt-1 text-[10px] ${m.sender === "member" ? "text-forest-green/40" : "text-card/70"}`}>
-                          {new Date(m.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-                          {m.sender === "bot" ? " · IA" : ""}
-                        </p>
-                      </div>
-                    </div>
-                  ))
+                  messages.map((m) => <MessageBubble key={m.id} msg={m} />)
                 )}
               </div>
               <OperatorComposer conversationId={active.id} />

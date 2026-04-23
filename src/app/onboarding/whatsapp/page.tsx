@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useState } from "react";
 import {
   connectWhatsappStep,
   resetWhatsappStep,
@@ -19,11 +19,9 @@ export default function WhatsAppConnectStep() {
     async () => resetWhatsappStep(),
     undefined,
   );
-  const [showModal, setShowModal] = useState(false);
-
-  useEffect(() => {
-    if (state?.ok && state.qr) setShowModal(true);
-  }, [state]);
+  const [closedForQr, setClosedForQr] = useState<string | null>(null);
+  const currentQrKey = state?.qr?.base64 ?? state?.qr?.pairingCode ?? null;
+  const showModal = !!(state?.ok && state.qr) && currentQrKey !== closedForQr;
 
   return (
     <>
@@ -98,7 +96,7 @@ export default function WhatsAppConnectStep() {
       {showModal && state?.qr ? (
         <WhatsappConnectModal
           initialQr={state.qr}
-          onClose={() => setShowModal(false)}
+          onClose={() => setClosedForQr(currentQrKey)}
         />
       ) : null}
     </>

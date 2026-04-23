@@ -57,12 +57,14 @@ export function WhatsappChannelCard({ hasInstance, instanceName, metaPhoneNumber
 
   useEffect(() => {
     if (!hasInstance) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshStatus();
     const id = setInterval(refreshStatus, 8000);
     return () => clearInterval(id);
   }, [hasInstance]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (showQr) loadQr();
   }, [showQr]);
 
