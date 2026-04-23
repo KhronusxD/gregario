@@ -10,6 +10,7 @@ import {
   deleteInstance,
   getInstanceQr,
   instanceExists,
+  setInstanceWebhook,
 } from "@/lib/whatsapp/evolution";
 
 const ChurchSchema = z.object({
@@ -132,6 +133,9 @@ export async function connectWhatsappStep(): Promise<OnboardingState> {
       const created = await createEvolutionInstance(instanceName);
       if (created.qrcode) qr = created.qrcode;
     }
+
+    // Garante webhook sempre — tanto em instâncias novas quanto nas que já existiam
+    await setInstanceWebhook(instanceName).catch(() => undefined);
 
     // Se não veio do create, busca via /instance/connect (com tolerância a 404 transitório)
     if (!qr.base64 && !qr.pairingCode) {

@@ -6,9 +6,11 @@ import {
   deleteChannelAction,
   getChannelQrAction,
   getChannelStatusAction,
+  getWebhookStatusAction,
   logoutChannelAction,
   regenerateQrAction,
   restartChannelAction,
+  syncWebhookAction,
   type ChannelStatus,
   type WhatsappChannelState,
 } from "@/actions/whatsapp-channel";
@@ -42,6 +44,20 @@ export function WhatsappChannelCard({ hasInstance, instanceName, metaPhoneNumber
   const [logoutState, logout] = useActionState(logoutChannelAction, INITIAL);
   const [restartState, restart] = useActionState(restartChannelAction, INITIAL);
   const [deleteState, remove] = useActionState(deleteChannelAction, INITIAL);
+  const [syncState, syncWebhook] = useActionState(syncWebhookAction, INITIAL);
+
+  const [webhook, setWebhook] = useState<{
+    url: string | null;
+    enabled: boolean;
+    events: string[];
+    expectedUrl: string | null;
+    healthy: boolean;
+  } | null>(null);
+
+  const refreshWebhook = async () => {
+    const w = await getWebhookStatusAction();
+    setWebhook(w);
+  };
 
   const refreshStatus = async () => {
     setLoadingStatus(true);
@@ -59,9 +75,18 @@ export function WhatsappChannelCard({ hasInstance, instanceName, metaPhoneNumber
     if (!hasInstance) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshStatus();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    refreshWebhook();
     const id = setInterval(refreshStatus, 8000);
     return () => clearInterval(id);
   }, [hasInstance]);
+
+  useEffect(() => {
+    if (syncState.ok && syncState.message) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      refreshWebhook();
+    }
+  }, [syncState]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -213,6 +238,59 @@ export function WhatsappChannelCard({ hasInstance, instanceName, metaPhoneNumber
           )}
         </div>
       ) : null}
+
+      <div className="rounded-lg border border-forest-green/10 bg-surface p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="font-display text-xs font-bold text-forest-green">Webhook Evolution</p>
+            <p className="mt-1 font-sans text-[11px] text-forest-green/60">
+              URL que recebe as mensagens. Precisa estar ativa com os eventos certos.
+            </p>
+          </div>
+          <span
+            className={`rounded-full px-2.5 py-0.5 font-display text-[10px] font-bold uppercase tracking-widest ${
+              webhook?.healthy ? "bg-action-green/15 text-action-green" : "bg-yellow-400/20 text-yellow-700"
+            }`}
+          >
+            {webhook?.healthy ? "OK" : "Não configurado"}
+          </span>
+        </div>
+        <dl className="mt-3 grid gap-1.5 font-sans text-[11px] text-forest-green/70">
+          <div className="flex items-center justify-between gap-2">
+            <dt className="uppercase tracking-widest text-forest-green/50">URL atual</dt>
+            <dd className="truncate font-mono text-right text-forest-green">{webhook?.url ?? "—"}</dd>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <dt className="uppercase tracking-widest text-forest-green/50">Esperado</dt>
+            <dd className="truncate font-mono text-right text-forest-green/80">{webhook?.expectedUrl ?? "—"}</dd>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <dt className="uppercase tracking-widest text-forest-green/50">Ativo</dt>
+            <dd className={webhook?.enabled ? "text-action-green" : "text-red-600"}>
+              {webhook?.enabled ? "sim" : "não"}
+            </dd>
+          </div>
+          <div className="flex items-start justify-between gap-2">
+            <dt className="uppercase tracking-widest text-forest-green/50">Eventos</dt>
+            <dd className="text-right font-mono text-[10px] text-forest-green/70">
+              {webhook?.events.length ? webhook.events.join(", ") : "—"}
+            </dd>
+          </div>
+        </dl>
+        <form action={(fd) => start(() => syncWebhook(fd))} className="mt-3">
+          <button
+            type="submit"
+            className="rounded-full bg-forest-green/10 px-4 py-2 font-display text-[10px] font-bold uppercase tracking-widest text-forest-green hover:bg-forest-green/15"
+          >
+            Aplicar webhook no Evolution
+          </button>
+        </form>
+        {syncState.message ? (
+          <p className={`mt-2 font-sans text-xs ${syncState.ok ? "text-action-green" : "text-red-500"}`}>
+            {syncState.message}
+          </p>
+        ) : null}
+      </div>
 
       <ConnectLinkShare />
 

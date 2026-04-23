@@ -50,19 +50,45 @@ export type CreateInstanceResponse = {
   qrcode?: EvolutionQr;
 };
 
+// Eventos Evolution v2 que o backend do Gregário consome
+export const DEFAULT_WEBHOOK_EVENTS = [
+  "MESSAGES_UPSERT",
+  "MESSAGES_UPDATE",
+  "CONNECTION_UPDATE",
+  "QRCODE_UPDATED",
+  "SEND_MESSAGE",
+] as const;
+
+function webhookUrl(): string | null {
+  const origin = process.env.APP_URL ?? process.env.NEXT_PUBLIC_APP_URL;
+  if (!origin) return null;
+  return `${origin.replace(/\/$/, "")}/api/webhooks/evolution`;
+}
+
 export async function createEvolutionInstance(instanceName: string): Promise<CreateInstanceResponse> {
   if (!BASE || !KEY) throw new Error("Evolution API não configurada");
+  const url = webhookUrl();
+  const body: Record<string, unknown> = {
+    instanceName,
+    integration: "WHATSAPP-BAILEYS",
+    qrcode: true,
+  };
+  if (url) {
+    body.webhook = {
+      url,
+      enabled: true,
+      webhook_by_events: false,
+      webhook_base64: false,
+      events: DEFAULT_WEBHOOK_EVENTS,
+    };
+  }
   const res = await fetch(`${BASE}/instance/create`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       apikey: KEY,
     },
-    body: JSON.stringify({
-      instanceName,
-      integration: "WHATSAPP-BAILEYS",
-      qrcode: true,
-    }),
+    body: JSON.stringify(body),
   });
   const text = await res.text();
   if (!res.ok) {
@@ -73,6 +99,67 @@ export async function createEvolutionInstance(instanceName: string): Promise<Cre
   } catch {
     return {};
   }
+}
+
+// Evolution v2: POST /webhook/set/{instance}
+// (força webhook em instâncias já criadas ou reaplicação após mudanças)
+export async function setInstanceWebhook(
+  instanceName: string,
+  opts?: { url?: string; events?: readonly string[] },
+): Promise<{ ok: boolean; message?: string }> {
+  if (!BASE || !KEY) throw new Error("Evolution API não configurada");
+  const url = opts?.url ?? webhookUrl();
+  if (!url) {
+    return { ok: false, message: "APP_URL / NEXT_PUBLIC_APP_URL não configurada" };
+  }
+  const events = opts?.events ?? DEFAULT_WEBHOOK_EVENTS;
+  const payload = {
+    url,
+    enabled: true,
+    webhook_by_events: false,
+    webhook_base64: false,
+    events,
+  };
+  // Evolution v2 aceita ambos os formatos — alguns builds exigem payload
+  // wrapped em { webhook: {...} }. Tentamos o wrapped primeiro.
+  for (const body of [{ webhook: payload }, payload]) {
+    const res = await fetch(`${BASE}/webhook/set/${instanceName}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: KEY },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) return { ok: true };
+    // 400 provavelmente = formato errado — tenta próximo
+    if (res.status !== 400) {
+      const text = await res.text().catch(() => "");
+      return { ok: false, message: `setWebhook ${res.status}: ${text.slice(0, 160)}` };
+    }
+  }
+  return { ok: false, message: "Evolution recusou ambos os formatos de webhook" };
+}
+
+export async function getInstanceWebhook(instanceName: string): Promise<{
+  url?: string;
+  enabled?: boolean;
+  events?: string[];
+} | null> {
+  if (!BASE || !KEY) return null;
+  const res = await fetch(`${BASE}/webhook/find/${instanceName}`, {
+    headers: { apikey: KEY },
+    cache: "no-store",
+  });
+  if (!res.ok) return null;
+  const json = (await res.json()) as {
+    url?: string;
+    enabled?: boolean;
+    events?: string[];
+    webhook?: { url?: string; enabled?: boolean; events?: string[] };
+  };
+  return {
+    url: json.url ?? json.webhook?.url,
+    enabled: json.enabled ?? json.webhook?.enabled,
+    events: json.events ?? json.webhook?.events,
+  };
 }
 
 export async function getInstanceQr(instanceName: string): Promise<EvolutionQr> {

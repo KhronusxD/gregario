@@ -8,8 +8,10 @@ import {
   deleteInstance,
   getInstanceQr,
   getInstanceStatus,
+  getInstanceWebhook,
   logoutInstance,
   restartInstance,
+  setInstanceWebhook,
   fetchInstanceInfo,
 } from "@/lib/whatsapp/evolution";
 import { encodeConnectToken } from "@/lib/whatsapp/connect-token";
@@ -46,6 +48,9 @@ export async function createChannelAction(
     }
   }
 
+  // Garante webhook — create nem sempre aplica corretamente em todos os builds
+  await setInstanceWebhook(instance).catch(() => undefined);
+
   const { error } = await admin
     .from("workspaces")
     .update({ evolution_instance: instance } as never)
@@ -54,6 +59,39 @@ export async function createChannelAction(
 
   revalidatePath("/dashboard/settings/whatsapp");
   return { ok: true, message: "Instância criada. Escaneie o QR para conectar." };
+}
+
+export async function syncWebhookAction(
+  _prev: WhatsappChannelState,
+  _fd: FormData,
+): Promise<WhatsappChannelState> {
+  const { instance } = await loadInstance();
+  if (!instance) return { ok: false, message: "Sem instância configurada" };
+  const r = await setInstanceWebhook(instance);
+  if (!r.ok) return { ok: false, message: r.message ?? "Falha ao aplicar webhook" };
+  revalidatePath("/dashboard/settings/whatsapp");
+  return { ok: true, message: "Webhook aplicado." };
+}
+
+export async function getWebhookStatusAction(): Promise<{
+  url: string | null;
+  enabled: boolean;
+  events: string[];
+  expectedUrl: string | null;
+  healthy: boolean;
+}> {
+  const { instance } = await loadInstance();
+  const origin = process.env.APP_URL ?? process.env.NEXT_PUBLIC_APP_URL;
+  const expectedUrl = origin ? `${origin.replace(/\/$/, "")}/api/webhooks/evolution` : null;
+  if (!instance) {
+    return { url: null, enabled: false, events: [], expectedUrl, healthy: false };
+  }
+  const info = await getInstanceWebhook(instance).catch(() => null);
+  const url = info?.url ?? null;
+  const enabled = !!info?.enabled;
+  const events = info?.events ?? [];
+  const healthy = !!(url && enabled && expectedUrl && url === expectedUrl && events.length > 0);
+  return { url, enabled, events, expectedUrl, healthy };
 }
 
 export async function regenerateQrAction(
