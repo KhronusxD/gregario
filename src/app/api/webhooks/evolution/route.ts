@@ -63,9 +63,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false }, { status: 200 });
   }
 
+  console.log(
+    "[evolution webhook]",
+    JSON.stringify({
+      event: (payload as { event?: string }).event,
+      instance: payload.instance,
+      fromMe: payload.data?.key?.fromMe,
+      messageType: payload.data?.messageType,
+      hasBody: !!(payload.data?.message?.conversation || payload.data?.message?.extendedTextMessage?.text),
+    }),
+  );
+
   // Fire-and-forget: respond 200 fast, process in background
   handleEvolutionEvent(payload).catch((err) =>
-    console.error("[evolution webhook]", err),
+    console.error("[evolution webhook] handler error:", err),
   );
   return NextResponse.json({ ok: true });
 }

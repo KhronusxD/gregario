@@ -68,7 +68,12 @@ export async function syncWebhookAction(
   const { instance } = await loadInstance();
   if (!instance) return { ok: false, message: "Sem instância configurada" };
   const r = await setInstanceWebhook(instance);
-  if (!r.ok) return { ok: false, message: r.message ?? "Falha ao aplicar webhook" };
+  if (!r.ok) {
+    const debug = r.attempts
+      ? "\nTentativas:\n" + r.attempts.map((a) => `${a.method} → ${a.status} ${a.body}`).join("\n")
+      : "";
+    return { ok: false, message: (r.message ?? "Falha ao aplicar webhook") + debug };
+  }
   revalidatePath("/dashboard/settings/whatsapp");
   return { ok: true, message: "Webhook aplicado." };
 }

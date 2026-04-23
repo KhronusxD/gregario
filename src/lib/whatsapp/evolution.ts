@@ -74,10 +74,14 @@ export async function createEvolutionInstance(instanceName: string): Promise<Cre
     qrcode: true,
   };
   if (url) {
+    // Evolution v2 aceita tanto camelCase quanto snake_case em alguns builds;
+    // mandamos os dois pra maximizar compatibilidade.
     body.webhook = {
       url,
       enabled: true,
+      webhookByEvents: false,
       webhook_by_events: false,
+      webhookBase64: false,
       webhook_base64: false,
       events: DEFAULT_WEBHOOK_EVENTS,
     };
@@ -101,41 +105,54 @@ export async function createEvolutionInstance(instanceName: string): Promise<Cre
   }
 }
 
-// Evolution v2: POST /webhook/set/{instance}
-// (força webhook em instâncias já criadas ou reaplicação após mudanças)
+// Evolution v2: POST /webhook/set/{instance} (alguns builds aceitam PUT)
+// Formatos variam entre versões — tentamos múltiplas combinações
+// (camelCase/snake_case × wrapped/flat × POST/PUT).
 export async function setInstanceWebhook(
   instanceName: string,
   opts?: { url?: string; events?: readonly string[] },
-): Promise<{ ok: boolean; message?: string }> {
+): Promise<{ ok: boolean; message?: string; attempts?: Array<{ method: string; status: number; body: string }> }> {
   if (!BASE || !KEY) throw new Error("Evolution API não configurada");
   const url = opts?.url ?? webhookUrl();
   if (!url) {
     return { ok: false, message: "APP_URL / NEXT_PUBLIC_APP_URL não configurada" };
   }
   const events = opts?.events ?? DEFAULT_WEBHOOK_EVENTS;
-  const payload = {
-    url,
-    enabled: true,
-    webhook_by_events: false,
-    webhook_base64: false,
-    events,
-  };
-  // Evolution v2 aceita ambos os formatos — alguns builds exigem payload
-  // wrapped em { webhook: {...} }. Tentamos o wrapped primeiro.
-  for (const body of [{ webhook: payload }, payload]) {
-    const res = await fetch(`${BASE}/webhook/set/${instanceName}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", apikey: KEY },
-      body: JSON.stringify(body),
-    });
-    if (res.ok) return { ok: true };
-    // 400 provavelmente = formato errado — tenta próximo
-    if (res.status !== 400) {
+
+  const variants: Array<Record<string, unknown>> = [
+    // v2 moderno, wrapped, camelCase
+    { webhook: { url, enabled: true, webhookByEvents: false, webhookBase64: false, events } },
+    // v2 moderno, flat, camelCase
+    { url, enabled: true, webhookByEvents: false, webhookBase64: false, events },
+    // fallback snake_case
+    { webhook: { url, enabled: true, webhook_by_events: false, webhook_base64: false, events } },
+    { url, enabled: true, webhook_by_events: false, webhook_base64: false, events },
+  ];
+
+  const methods: Array<"POST" | "PUT"> = ["POST", "PUT"];
+  const attempts: Array<{ method: string; status: number; body: string }> = [];
+
+  for (const method of methods) {
+    for (const body of variants) {
+      const res = await fetch(`${BASE}/webhook/set/${instanceName}`, {
+        method,
+        headers: { "Content-Type": "application/json", apikey: KEY },
+        body: JSON.stringify(body),
+      });
       const text = await res.text().catch(() => "");
-      return { ok: false, message: `setWebhook ${res.status}: ${text.slice(0, 160)}` };
+      attempts.push({ method, status: res.status, body: text.slice(0, 200) });
+      if (res.ok) return { ok: true, attempts };
+      if (res.status !== 400 && res.status !== 404 && res.status !== 405) {
+        return { ok: false, message: `setWebhook ${method} ${res.status}: ${text.slice(0, 160)}`, attempts };
+      }
     }
   }
-  return { ok: false, message: "Evolution recusou ambos os formatos de webhook" };
+  const last = attempts[attempts.length - 1];
+  return {
+    ok: false,
+    message: `Evolution recusou todas as variações. Último: ${last?.status} ${last?.body}`,
+    attempts,
+  };
 }
 
 export async function getInstanceWebhook(instanceName: string): Promise<{
