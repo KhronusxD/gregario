@@ -31,7 +31,16 @@ export default async function WhatsAppPage({
   if (tab === "human") convQuery = convQuery.eq("status", "human");
   else if (tab === "bot") convQuery = convQuery.eq("status", "bot");
 
-  const { data: conversations } = await convQuery;
+  const { data: conversations, error: convError } = await convQuery;
+  if (convError) {
+    console.error("[whatsapp page] conversations query error:", convError.message);
+  }
+  console.log("[whatsapp page] query", {
+    workspace: ctx.workspace.id,
+    userId: ctx.user.id,
+    tab,
+    count: conversations?.length ?? 0,
+  });
   const list = (conversations ?? []) as Array<{
     id: string;
     phone: string;
