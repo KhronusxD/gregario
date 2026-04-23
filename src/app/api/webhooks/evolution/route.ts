@@ -126,9 +126,12 @@ async function handleEvolutionEvent(payload: EvolutionPayload) {
 
   if (!data) return;
 
-  const phone = extractPhone(data.key?.remoteJid);
+  const jid = data.key?.remoteJid;
+  // Grupos (@g.us), broadcasts e canais — ignoramos silenciosamente
+  if (jid && /@(g\.us|broadcast|newsletter)$/i.test(jid)) return;
+  const phone = extractPhone(jid);
   if (!phone) {
-    console.warn("[evolution webhook] could not extract phone from:", data.key?.remoteJid);
+    console.warn("[evolution webhook] could not extract phone from:", jid);
     return;
   }
 
