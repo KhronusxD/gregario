@@ -54,7 +54,7 @@ export async function recordInboundMessage(params: {
   whatsappMsgId?: string;
 }): Promise<string | null> {
   const supabase = createAdminClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("whatsapp_messages")
     .insert({
       workspace_id: params.workspaceId,
@@ -69,6 +69,12 @@ export async function recordInboundMessage(params: {
     } as never)
     .select("id")
     .single();
+  if (error) {
+    console.error("[recordInboundMessage] insert error:", error.message, {
+      conversationId: params.conversationId,
+      type: params.type,
+    });
+  }
   const previewSource = params.body?.trim() || previewForType(params.type);
   await supabase
     .from("whatsapp_conversations")

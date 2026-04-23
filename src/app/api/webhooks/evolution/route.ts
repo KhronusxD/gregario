@@ -87,11 +87,16 @@ async function handleEvolutionEvent(payload: EvolutionPayload) {
   if (!instance) return;
 
   const supabase = createAdminClient();
-  const { data: workspace } = await supabase
+  const { data: workspace, error: wsError } = await supabase
     .from("workspaces")
     .select("id, name, ia_active, whatsapp_active, attendance_start, attendance_end")
     .eq("evolution_instance", instance)
     .maybeSingle();
+
+  if (wsError) {
+    console.error("[evolution webhook] workspace lookup error:", wsError.message);
+    return;
+  }
 
   const ws = workspace as {
     id: string;
@@ -101,7 +106,10 @@ async function handleEvolutionEvent(payload: EvolutionPayload) {
     attendance_start: string | null;
     attendance_end: string | null;
   } | null;
-  if (!ws) return;
+  if (!ws) {
+    console.error("[evolution webhook] no workspace found for instance:", instance);
+    return;
+  }
 
   // connection.update → ativa whatsapp_active quando sessão fica "open"
   const event = (payload as { event?: string }).event ?? "";
@@ -119,7 +127,10 @@ async function handleEvolutionEvent(payload: EvolutionPayload) {
   if (!data) return;
 
   const phone = extractPhone(data.key?.remoteJid);
-  if (!phone) return;
+  if (!phone) {
+    console.warn("[evolution webhook] could not extract phone from:", data.key?.remoteJid);
+    return;
+  }
 
   const conversation = await getOrCreateConversation({ workspaceId: ws.id, phone });
 
