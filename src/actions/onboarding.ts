@@ -157,7 +157,11 @@ export async function connectWhatsappStep(): Promise<OnboardingState> {
 
     await admin
       .from("workspaces")
-      .update({ evolution_instance: instanceName, onboarding_step: 3 } as never)
+      .update({
+        evolution_instance: instanceName,
+        onboarding_step: 3,
+        whatsapp_active: true,
+      } as never)
       .eq("id", ctx.workspace.id);
 
     return {

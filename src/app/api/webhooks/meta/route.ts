@@ -56,12 +56,22 @@ async function handleMetaEvent(payload: unknown) {
     attendance_start: string | null;
     attendance_end: string | null;
   } | null;
-  if (!ws || !ws.whatsapp_active || !ws.ia_active) return;
+  if (!ws) return;
 
   const conversation = await getOrCreateConversation({
     workspaceId: ws.id,
     phone: msg.from,
   });
+
+  if (!ws.whatsapp_active || !ws.ia_active) {
+    await recordInboundMessage({
+      workspaceId: ws.id,
+      conversationId: conversation.id,
+      body: msg.body,
+      type: msg.type,
+    });
+    return;
+  }
 
   // Auto-reativa IA se timer venceu
   const { data: convFresh } = await supabase

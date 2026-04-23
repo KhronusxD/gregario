@@ -73,10 +73,7 @@ export async function POST(req: Request) {
 async function handleEvolutionEvent(payload: EvolutionPayload) {
   const instance = payload.instance;
   const data = payload.data;
-  if (!instance || !data) return;
-
-  const phone = extractPhone(data.key?.remoteJid);
-  if (!phone) return;
+  if (!instance) return;
 
   const supabase = createAdminClient();
   const { data: workspace } = await supabase
@@ -94,6 +91,24 @@ async function handleEvolutionEvent(payload: EvolutionPayload) {
     attendance_end: string | null;
   } | null;
   if (!ws) return;
+
+  // connection.update → ativa whatsapp_active quando sessão fica "open"
+  const event = (payload as { event?: string }).event ?? "";
+  if (/connection[._]update/i.test(event)) {
+    const state = (data as { state?: string } | null)?.state;
+    if (state === "open" && !ws.whatsapp_active) {
+      await supabase
+        .from("workspaces")
+        .update({ whatsapp_active: true } as never)
+        .eq("id", ws.id);
+    }
+    return;
+  }
+
+  if (!data) return;
+
+  const phone = extractPhone(data.key?.remoteJid);
+  if (!phone) return;
 
   const conversation = await getOrCreateConversation({ workspaceId: ws.id, phone });
 
@@ -132,7 +147,24 @@ async function handleEvolutionEvent(payload: EvolutionPayload) {
     return;
   }
 
-  if (!ws.whatsapp_active || !ws.ia_active) return;
+  // Sempre persiste o inbound — a aba WhatsApp depende disso.
+  // Se a IA/feature estiver desativada, ainda gravamos pra operador humano ver.
+  if (!ws.whatsapp_active || !ws.ia_active) {
+    const body = extractBody(data);
+    const media = extractMedia(data);
+    if (body || media) {
+      await recordInboundMessage({
+        workspaceId: ws.id,
+        conversationId: conversation.id,
+        body: media?.caption ?? body,
+        type: media?.kind,
+        mediaUrl: media?.url,
+        mediaType: media?.mimeType,
+        whatsappMsgId: data.key?.id,
+      });
+    }
+    return;
+  }
 
   // Auto-reativa IA se timer venceu
   const { data: convFresh } = await supabase

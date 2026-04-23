@@ -53,7 +53,7 @@ export async function createChannelAction(
 
   const { error } = await admin
     .from("workspaces")
-    .update({ evolution_instance: instance } as never)
+    .update({ evolution_instance: instance, whatsapp_active: true } as never)
     .eq("id", ctx.workspace.id);
   if (error) return { ok: false, message: error.message };
 
