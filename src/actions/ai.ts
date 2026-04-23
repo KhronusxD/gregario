@@ -8,7 +8,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 const SettingsSchema = z.object({
   assistant_name: z.string().max(60).optional().nullable(),
   show_assistant_name: z.boolean().optional(),
-  system_prompt: z.string().max(6000).optional().nullable(),
+  system_prompt: z.string().max(20000).optional().nullable(),
   tone: z.enum(["formal", "profissional", "acolhedor", "amigavel", "pastoral"]).optional(),
   autonomy: z.enum(["supervisionado", "semi_autonomo", "autonomo"]).optional(),
   max_messages_per_conversation: z.coerce.number().int().min(0).max(500).optional(),

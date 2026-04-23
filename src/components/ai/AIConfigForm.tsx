@@ -73,7 +73,8 @@ export function AIConfigForm({ settings }: { settings: AISettings }) {
             <textarea
               name="system_prompt"
               defaultValue={settings.system_prompt ?? ""}
-              rows={6}
+              rows={14}
+              maxLength={20000}
               placeholder="Somos a Igreja Batista Central, linha pentecostal tradicional. Priorizamos o cuidado com novos convertidos e o trabalho com adolescentes..."
               className="input"
             />
