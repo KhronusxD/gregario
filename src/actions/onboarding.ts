@@ -5,7 +5,12 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth/dal";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createEvolutionInstance, getInstanceQr } from "@/lib/whatsapp/evolution";
+import {
+  createEvolutionInstance,
+  deleteInstance,
+  getInstanceQr,
+  instanceExists,
+} from "@/lib/whatsapp/evolution";
 
 const ChurchSchema = z.object({
   name: z.string().min(2).trim(),
@@ -119,18 +124,38 @@ export async function connectWhatsappStep(): Promise<OnboardingState> {
 
   const instanceName = `ws_${ctx.workspace.slug}`;
   try {
-    try {
-      await createEvolutionInstance(instanceName);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "";
-      // Se já existe, segue pro QR normalmente
-      if (!/already|exists|409/i.test(msg)) throw e;
+    const exists = await instanceExists(instanceName);
+    let qr: { base64?: string; code?: string; pairingCode?: string } = {};
+
+    if (!exists) {
+      // Cria. Evolution v2 já retorna o QR no create.
+      const created = await createEvolutionInstance(instanceName);
+      if (created.qrcode) qr = created.qrcode;
     }
-    const qr = await getInstanceQr(instanceName);
+
+    // Se não veio do create, busca via /instance/connect (com tolerância a 404 transitório)
+    if (!qr.base64 && !qr.pairingCode) {
+      try {
+        qr = await getInstanceQr(instanceName);
+      } catch (e) {
+        const status = (e as { status?: number }).status;
+        if (status === 404) {
+          // Instância sumiu ou não inicializou ainda — limpa e manda recriar
+          await deleteInstance(instanceName).catch(() => undefined);
+          return {
+            message:
+              "Instância em estado inconsistente. Toque em Reiniciar conexão e tente de novo.",
+          };
+        }
+        throw e;
+      }
+    }
+
     await admin
       .from("workspaces")
       .update({ evolution_instance: instanceName, onboarding_step: 3 } as never)
       .eq("id", ctx.workspace.id);
+
     return {
       ok: true,
       message: qr.base64 ? "Escaneie o QR Code no WhatsApp." : "Instância criada.",
@@ -142,6 +167,22 @@ export async function connectWhatsappStep(): Promise<OnboardingState> {
   } catch (e) {
     return { message: e instanceof Error ? e.message : "Falha ao conectar." };
   }
+}
+
+export async function resetWhatsappStep(): Promise<OnboardingState> {
+  const ctx = await requireRole(["admin"]);
+  const admin = createAdminClient();
+  const instanceName = `ws_${ctx.workspace.slug}`;
+
+  // Tenta remover no Evolution — se já não existe, tudo bem
+  await deleteInstance(instanceName).catch(() => undefined);
+
+  await admin
+    .from("workspaces")
+    .update({ evolution_instance: null, whatsapp_active: false } as never)
+    .eq("id", ctx.workspace.id);
+
+  return { ok: true, message: "Conexão reiniciada. Clique em Gerar instância pra recomeçar." };
 }
 
 export async function completeWhatsappStep() {

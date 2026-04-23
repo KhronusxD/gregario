@@ -21,20 +21,24 @@ export function WhatsappConnectModal({ initialQr, onClose }: Props) {
     let cancelled = false;
 
     const tick = async () => {
-      const s = await getChannelStatusAction();
-      if (cancelled) return;
-      if (s.state === "open") {
-        setState("open");
-        setNumber(s.number);
-        return;
-      }
-      if (s.state === "none") return;
-      setState(s.state === "unknown" ? "connecting" : s.state);
+      try {
+        const s = await getChannelStatusAction();
+        if (cancelled) return;
+        if (s.state === "open") {
+          setState("open");
+          setNumber(s.number);
+          return;
+        }
+        if (s.state === "none") return;
+        setState(s.state === "unknown" ? "connecting" : s.state);
 
-      // Ainda não abriu → atualiza QR (regenera se expirou)
-      const r = await getChannelQrAction();
-      if (!cancelled) {
-        setQr({ base64: r.base64 ?? null, pairingCode: r.pairingCode ?? null });
+        const r = await getChannelQrAction();
+        if (cancelled) return;
+        if (r.base64 || r.pairingCode) {
+          setQr({ base64: r.base64 ?? null, pairingCode: r.pairingCode ?? null });
+        }
+      } catch {
+        // Mantém QR anterior e segue — próximo tick tenta de novo
       }
     };
 

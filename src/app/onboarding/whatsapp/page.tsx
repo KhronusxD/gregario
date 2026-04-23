@@ -1,13 +1,22 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
-import { connectWhatsappStep, skipWhatsappStep, type OnboardingState } from "@/actions/onboarding";
+import {
+  connectWhatsappStep,
+  resetWhatsappStep,
+  skipWhatsappStep,
+  type OnboardingState,
+} from "@/actions/onboarding";
 import { Stepper } from "@/components/onboarding/Stepper";
 import { WhatsappConnectModal } from "@/components/onboarding/WhatsappConnectModal";
 
 export default function WhatsAppConnectStep() {
   const [state, action, pending] = useActionState<OnboardingState, FormData>(
     async () => connectWhatsappStep(),
+    undefined,
+  );
+  const [resetState, resetAction, resetting] = useActionState<OnboardingState, FormData>(
+    async () => resetWhatsappStep(),
     undefined,
   );
   const [showModal, setShowModal] = useState(false);
@@ -36,15 +45,28 @@ export default function WhatsAppConnectStep() {
           </ol>
         </div>
 
-        <form action={action}>
-          <button
-            type="submit"
-            disabled={pending}
-            className="rounded-full bg-gradient-to-br from-forest-green to-action-green px-6 py-3 font-display text-sm font-bold text-card active:scale-95 disabled:opacity-60"
-          >
-            {pending ? "Gerando..." : state?.ok ? "Reabrir QR Code" : "Gerar instância"}
-          </button>
-        </form>
+        <div className="flex flex-wrap items-center gap-3">
+          <form action={action}>
+            <button
+              type="submit"
+              disabled={pending || resetting}
+              className="rounded-full bg-gradient-to-br from-forest-green to-action-green px-6 py-3 font-display text-sm font-bold text-card active:scale-95 disabled:opacity-60"
+            >
+              {pending ? "Gerando..." : state?.ok ? "Reabrir QR Code" : "Gerar instância"}
+            </button>
+          </form>
+          {state?.ok || (state?.message && !state.ok) ? (
+            <form action={resetAction}>
+              <button
+                type="submit"
+                disabled={pending || resetting}
+                className="rounded-full bg-forest-green/10 px-5 py-3 font-display text-xs font-bold uppercase tracking-widest text-forest-green hover:bg-forest-green/15 disabled:opacity-60"
+              >
+                {resetting ? "Reiniciando..." : "Reiniciar conexão"}
+              </button>
+            </form>
+          ) : null}
+        </div>
 
         {state?.message && !state.ok ? (
           <p className="rounded-sm bg-red-50 px-3 py-2 font-sans text-sm text-red-700">
@@ -54,6 +76,15 @@ export default function WhatsAppConnectStep() {
         {state?.ok ? (
           <p className="rounded-sm bg-accent-green/20 px-3 py-2 font-sans text-sm text-forest-green">
             {state.message}
+          </p>
+        ) : null}
+        {resetState?.message ? (
+          <p
+            className={`rounded-sm px-3 py-2 font-sans text-sm ${
+              resetState.ok ? "bg-accent-green/20 text-forest-green" : "bg-red-50 text-red-700"
+            }`}
+          >
+            {resetState.message}
           </p>
         ) : null}
       </div>

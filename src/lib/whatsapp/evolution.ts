@@ -38,7 +38,19 @@ export async function sendWhatsAppText({
   return res.json();
 }
 
-export async function createEvolutionInstance(instanceName: string) {
+export type EvolutionQr = {
+  base64?: string;
+  code?: string;
+  pairingCode?: string;
+};
+
+export type CreateInstanceResponse = {
+  instance?: { instanceName?: string; status?: string };
+  hash?: { apikey?: string } | string;
+  qrcode?: EvolutionQr;
+};
+
+export async function createEvolutionInstance(instanceName: string): Promise<CreateInstanceResponse> {
   if (!BASE || !KEY) throw new Error("Evolution API não configurada");
   const res = await fetch(`${BASE}/instance/create`, {
     method: "POST",
@@ -52,18 +64,37 @@ export async function createEvolutionInstance(instanceName: string) {
       qrcode: true,
     }),
   });
-  if (!res.ok) throw new Error(`createInstance failed: ${res.status}`);
-  return res.json();
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`createInstance failed: ${res.status} ${text.slice(0, 200)}`);
+  }
+  try {
+    return text ? (JSON.parse(text) as CreateInstanceResponse) : {};
+  } catch {
+    return {};
+  }
 }
 
-export async function getInstanceQr(instanceName: string) {
+export async function getInstanceQr(instanceName: string): Promise<EvolutionQr> {
   if (!BASE || !KEY) throw new Error("Evolution API não configurada");
   const res = await fetch(`${BASE}/instance/connect/${instanceName}`, {
     headers: { apikey: KEY },
     cache: "no-store",
   });
-  if (!res.ok) throw new Error(`instanceQr failed: ${res.status}`);
-  return res.json() as Promise<{ base64?: string; code?: string; pairingCode?: string }>;
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    const err = new Error(`instanceQr failed: ${res.status} ${body.slice(0, 120)}`) as Error & {
+      status: number;
+    };
+    err.status = res.status;
+    throw err;
+  }
+  return res.json() as Promise<EvolutionQr>;
+}
+
+export async function instanceExists(instanceName: string): Promise<boolean> {
+  const info = await fetchInstanceInfo(instanceName).catch(() => null);
+  return !!info;
 }
 
 export type EvolutionConnectionState = "open" | "connecting" | "close" | "unknown";
