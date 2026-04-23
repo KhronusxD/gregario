@@ -8,9 +8,9 @@ import { ChannelStatusBadge } from "@/components/whatsapp/ChannelStatusBadge";
 import { MessageBubble } from "@/components/whatsapp/MessageBubble";
 
 const TABS = [
+  { value: "all", label: "Todas" },
   { value: "human", label: "Aguardando" },
   { value: "bot", label: "Bot ativo" },
-  { value: "all", label: "Todas" },
 ];
 
 export default async function WhatsAppPage({
@@ -19,7 +19,7 @@ export default async function WhatsAppPage({
   searchParams: Promise<{ tab?: string; c?: string }>;
 }) {
   const ctx = await requireWorkspace();
-  const { tab = "human", c } = await searchParams;
+  const { tab = "all", c } = await searchParams;
   const supabase = await createClient();
 
   let convQuery = supabase

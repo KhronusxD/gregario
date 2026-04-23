@@ -69,11 +69,30 @@ export async function recordInboundMessage(params: {
     } as never)
     .select("id")
     .single();
+  const previewSource = params.body?.trim() || previewForType(params.type);
   await supabase
     .from("whatsapp_conversations")
-    .update({ last_message_at: new Date().toISOString() } as never)
+    .update({
+      last_message_at: new Date().toISOString(),
+      last_preview: previewSource.slice(0, 120),
+    } as never)
     .eq("id", params.conversationId);
   return (data as { id: string } | null)?.id ?? null;
+}
+
+function previewForType(type?: string): string {
+  switch (type) {
+    case "audio":
+      return "🎤 Áudio";
+    case "image":
+      return "📷 Imagem";
+    case "document":
+      return "📄 Documento";
+    case "video":
+      return "🎬 Vídeo";
+    default:
+      return "";
+  }
 }
 
 export async function processConversation(params: {
