@@ -6,6 +6,7 @@ import { OperatorComposer } from "@/components/whatsapp/OperatorComposer";
 import { ConversationControls } from "@/components/whatsapp/ConversationControls";
 import { ChannelStatusBadge } from "@/components/whatsapp/ChannelStatusBadge";
 import { MessageBubble } from "@/components/whatsapp/MessageBubble";
+import { WhatsAppRealtime } from "@/components/whatsapp/WhatsAppRealtime";
 
 const TABS = [
   { value: "all", label: "Todas" },
@@ -79,8 +80,9 @@ export default async function WhatsAppPage({
   const activeMember = active ? (Array.isArray(active.member) ? active.member[0] : active.member) : null;
 
   return (
-    <main className="ml-64 min-h-[calc(100vh-5rem)] p-10">
-      <div className="mb-6 flex items-start justify-between gap-4">
+    <main className="ml-64 flex h-[calc(100vh-5rem)] flex-col overflow-hidden p-6">
+      <WhatsAppRealtime workspaceId={ctx.workspace.id} activeConversationId={activeId} />
+      <div className="mb-4 flex flex-shrink-0 items-start justify-between gap-4">
         <PageHeader
           eyebrow="Atendimento"
           title="Secretaria WhatsApp"
@@ -89,10 +91,10 @@ export default async function WhatsAppPage({
         <ChannelStatusBadge />
       </div>
 
-      <div className="grid h-[calc(100vh-18rem)] grid-cols-[320px_1fr_300px] gap-4 rounded-lg bg-card shadow-card">
+      <div className="grid min-h-0 flex-1 grid-cols-[320px_1fr_300px] gap-4 overflow-hidden rounded-lg bg-card shadow-card">
         {/* Column 1: list */}
-        <aside className="flex flex-col border-r border-forest-green/5">
-          <div className="flex gap-2 border-b border-forest-green/5 p-4">
+        <aside className="flex min-h-0 flex-col overflow-hidden border-r border-forest-green/5">
+          <div className="flex flex-shrink-0 gap-2 border-b border-forest-green/5 p-4">
             {TABS.map((t) => (
               <a
                 key={t.value}
@@ -107,7 +109,7 @@ export default async function WhatsAppPage({
               </a>
             ))}
           </div>
-          <div className="flex-1 overflow-y-auto">
+          <div className="min-h-0 flex-1 overflow-y-auto">
             {list.length === 0 ? (
               <p className="p-6 font-sans text-sm text-forest-green/50">
                 Nenhuma conversa nesta aba.
@@ -140,14 +142,14 @@ export default async function WhatsAppPage({
         </aside>
 
         {/* Column 2: chat */}
-        <section className="flex flex-col">
+        <section className="flex min-h-0 flex-col overflow-hidden">
           {!active ? (
             <div className="flex flex-1 items-center justify-center">
               <p className="font-sans text-sm text-forest-green/50">Selecione uma conversa.</p>
             </div>
           ) : (
             <>
-              <header className="flex items-center justify-between border-b border-forest-green/5 p-4">
+              <header className="flex flex-shrink-0 items-center justify-between border-b border-forest-green/5 p-4">
                 <div>
                   <p className="font-display text-sm font-bold text-forest-green">
                     {activeMember?.name ?? active.display_name ?? formatPhone(active.phone)}
@@ -161,20 +163,22 @@ export default async function WhatsAppPage({
                   <ConversationControls conversationId={active.id} status={active.status} />
                 </div>
               </header>
-              <div className="flex-1 space-y-3 overflow-y-auto bg-surface p-6">
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-surface p-6">
                 {messages.length === 0 ? (
                   <p className="font-sans text-sm text-forest-green/50">Sem mensagens.</p>
                 ) : (
                   messages.map((m) => <MessageBubble key={m.id} msg={m} />)
                 )}
               </div>
-              <OperatorComposer conversationId={active.id} />
+              <div className="flex-shrink-0">
+                <OperatorComposer conversationId={active.id} />
+              </div>
             </>
           )}
         </section>
 
         {/* Column 3: member info */}
-        <aside className="border-l border-forest-green/5 p-6">
+        <aside className="min-h-0 overflow-y-auto border-l border-forest-green/5 p-6">
           {!activeMember ? (
             <p className="font-sans text-sm text-forest-green/50">Contato não vinculado a um membro.</p>
           ) : (
