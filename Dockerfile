@@ -11,7 +11,19 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm run build
+
+# Server Action stability across rebuilds — sem isso, todo deploy invalida
+# tabs abertas com "Failed to find Server Action".
+ARG NEXT_SERVER_ACTIONS_ENCRYPTION_KEY
+ARG DEPLOYMENT_ID
+ENV NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=${NEXT_SERVER_ACTIONS_ENCRYPTION_KEY}
+ENV DEPLOYMENT_ID=${DEPLOYMENT_ID:-build-placeholder}
+
+# Se DEPLOYMENT_ID não veio via build arg, gera um timestamp único por build
+RUN if [ "$DEPLOYMENT_ID" = "build-placeholder" ]; then \
+      export DEPLOYMENT_ID="build-$(date +%s)"; \
+    fi && \
+    npm run build
 
 FROM node:20-alpine AS runner
 WORKDIR /app
