@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const TABS = [
   { href: "/dashboard/settings", label: "Geral", exact: true },
   { href: "/dashboard/settings/whatsapp", label: "WhatsApp" },
+  { href: "/dashboard/settings/notifications", label: "Notificações" },
 ];
 
 export function SettingsTabs() {

@@ -24,6 +24,8 @@ export type AISettings = {
   debounce_seconds: number;
   allow_audio_transcription: boolean;
   allow_image_analysis: boolean;
+  notify_active: boolean;
+  notify_phone: string | null;
 };
 
 const DEFAULTS: Omit<AISettings, "id" | "workspace_id"> = {
@@ -47,6 +49,8 @@ const DEFAULTS: Omit<AISettings, "id" | "workspace_id"> = {
   debounce_seconds: 8,
   allow_audio_transcription: true,
   allow_image_analysis: true,
+  notify_active: false,
+  notify_phone: null,
 };
 
 export async function loadAISettings(workspaceId: string): Promise<AISettings> {

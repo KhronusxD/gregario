@@ -1,6 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { pauseAI } from "./transfer";
+import { notifyHandoff } from "./notify";
 import type { AgentContext } from "./context";
 
 export type AgentAction =
@@ -37,6 +38,11 @@ export async function executeAction(
           handoff_at: new Date().toISOString(),
         } as never)
         .eq("id", ctx.conversationId);
+      await notifyHandoff({
+        workspaceId: ctx.workspaceId,
+        conversationId: ctx.conversationId,
+        reason: action.params.motivo,
+      });
       return {
         ok: true,
         reply: action.reply ?? "Vou chamar um pastor para continuar essa conversa. Um momento, por favor. 🙏",

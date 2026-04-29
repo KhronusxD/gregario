@@ -6,6 +6,7 @@ import { buildSystemPrompt, buildMessageHistory } from "./prompt";
 import { executeAction, extractAction } from "./actions";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { pauseAI } from "./transfer";
+import { notifyHandoff } from "./notify";
 
 const MAX_TOKENS = 512;
 
@@ -26,14 +27,20 @@ export async function runAgent(params: {
   if (settings.max_messages_per_conversation > 0 && ctx.iaMessageCount >= settings.max_messages_per_conversation) {
     await pauseAI({ conversationId: params.conversationId });
     const supabase = createAdminClient();
+    const reason = "limite de mensagens IA atingido";
     await supabase
       .from("whatsapp_conversations")
       .update({
         status: "human",
-        handoff_reason: "limite de mensagens IA atingido",
+        handoff_reason: reason,
         handoff_at: new Date().toISOString(),
       } as never)
       .eq("id", params.conversationId);
+    await notifyHandoff({
+      workspaceId: params.workspaceId,
+      conversationId: params.conversationId,
+      reason,
+    });
     return "Vou passar essa conversa para um pastor humano continuar com você. Um momento. 🙏";
   }
 

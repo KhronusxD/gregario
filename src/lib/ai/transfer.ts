@@ -1,6 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendWithHumanDelay } from "@/lib/whatsapp/send";
+import { notifyHandoff } from "./notify";
 
 export async function transferToHuman(params: {
   conversationId: string;
@@ -12,7 +13,12 @@ export async function transferToHuman(params: {
 
   await supabase
     .from("whatsapp_conversations")
-    .update({ status: "human", ia_active: false } as never)
+    .update({
+      status: "human",
+      ia_active: false,
+      handoff_reason: params.reason,
+      handoff_at: new Date().toISOString(),
+    } as never)
     .eq("id", params.conversationId);
 
   await sendWithHumanDelay({
@@ -20,6 +26,12 @@ export async function transferToHuman(params: {
     conversationId: params.conversationId,
     phone: params.phone,
     text: "Vou conectar você com nossa equipe agora. Um momento! 🙏",
+  });
+
+  await notifyHandoff({
+    workspaceId: params.workspaceId,
+    conversationId: params.conversationId,
+    reason: params.reason,
   });
 }
 
