@@ -21,6 +21,9 @@ export async function sendWhatsAppText({
   if (!BASE || !KEY) {
     throw new Error("EVOLUTION_API_URL / EVOLUTION_API_KEY not configured");
   }
+  // Evolution v2 atual espera `text` no top-level. Builds antigos usavam
+  // `textMessage: { text }` — não usar mais (causa 400 "instance requires
+  // property text").
   const res = await fetch(`${BASE}/message/sendText/${instanceName}`, {
     method: "POST",
     headers: {
@@ -29,7 +32,7 @@ export async function sendWhatsAppText({
     },
     body: JSON.stringify({
       number: normalizePhone(phone),
-      textMessage: { text },
+      text,
     }),
   });
   if (!res.ok) {
