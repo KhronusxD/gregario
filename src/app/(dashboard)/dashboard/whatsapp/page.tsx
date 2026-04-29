@@ -1,4 +1,3 @@
-import { PageHeader } from "@/components/admin/PageHeader";
 import { requireWorkspace } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
 import { ChannelStatusBadge } from "@/components/whatsapp/ChannelStatusBadge";
@@ -63,13 +62,16 @@ export default async function WhatsAppPage({
     : null;
 
   return (
-    <main className="ml-64 flex h-[calc(100vh-5rem)] flex-col overflow-hidden p-6">
-      <div className="mb-4 flex flex-shrink-0 items-start justify-between gap-4">
-        <PageHeader
-          eyebrow="Atendimento"
-          title="Secretaria WhatsApp"
-          description="Conversas atendidas pela IA e pela equipe. Três colunas: lista, chat e contexto do membro."
-        />
+    <main className="ml-64 flex h-[calc(100vh-5rem)] flex-col overflow-hidden p-3">
+      <div className="mb-2 flex flex-shrink-0 items-center justify-between gap-4 px-1">
+        <div className="flex items-baseline gap-3">
+          <h1 className="font-display text-xl font-extrabold tracking-tight text-forest-green">
+            Secretaria WhatsApp
+          </h1>
+          <span className="font-sans text-xs text-forest-green/50">
+            Conversas atendidas pela IA e pela equipe
+          </span>
+        </div>
         <ChannelStatusBadge />
       </div>
 

@@ -169,27 +169,80 @@ export function WhatsAppShell({
   const activeConversation = conversations.find((c) => c.id === initialActiveId) ?? null;
   const activeMember: Member = initialMember ?? activeConversation?.member ?? null;
 
+  // Lista colapsável — preferência persistida em localStorage.
+  const [listCollapsed, setListCollapsed] = useState(false);
+  useEffect(() => {
+    const saved = localStorage.getItem("wa:listCollapsed");
+    if (saved === "1") setListCollapsed(true);
+  }, []);
+  useEffect(() => {
+    localStorage.setItem("wa:listCollapsed", listCollapsed ? "1" : "0");
+  }, [listCollapsed]);
+
+  const gridCols = listCollapsed
+    ? "grid-cols-[44px_1fr_280px]"
+    : "grid-cols-[300px_1fr_280px]";
+
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-[320px_1fr_300px] gap-4 overflow-hidden rounded-lg bg-card shadow-card">
-      {/* Coluna 1: lista */}
+    <div className={`grid min-h-0 flex-1 ${gridCols} gap-3 overflow-hidden rounded-lg bg-card shadow-card`}>
+      {/* Coluna 1: lista (colapsável) */}
       <aside className="flex min-h-0 flex-col overflow-hidden border-r border-forest-green/5">
-        <div className="flex flex-shrink-0 gap-2 border-b border-forest-green/5 p-4">
-          {TABS.map((t) => (
-            <a
-              key={t.value}
-              href={`/dashboard/whatsapp?tab=${t.value}${initialActiveId ? `&c=${initialActiveId}` : ""}`}
-              className={`rounded-full px-3 py-1 font-display text-[10px] font-bold uppercase tracking-widest ${
-                tab === t.value
-                  ? "bg-forest-green text-card"
-                  : "bg-forest-green/[0.06] text-forest-green/60 hover:text-forest-green"
-              }`}
-            >
-              {t.label}
-            </a>
-          ))}
+        <div className={`flex flex-shrink-0 items-center gap-2 border-b border-forest-green/5 ${listCollapsed ? "justify-center p-2" : "p-3"}`}>
+          <button
+            type="button"
+            onClick={() => setListCollapsed((v) => !v)}
+            aria-label={listCollapsed ? "Expandir lista" : "Recolher lista"}
+            className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md text-forest-green/60 hover:bg-forest-green/[0.06] hover:text-forest-green"
+          >
+            <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              {listCollapsed ? (
+                <polyline points="9 18 15 12 9 6" />
+              ) : (
+                <polyline points="15 18 9 12 15 6" />
+              )}
+            </svg>
+          </button>
+          {!listCollapsed && (
+            <div className="flex flex-1 gap-1.5">
+              {TABS.map((t) => (
+                <a
+                  key={t.value}
+                  href={`/dashboard/whatsapp?tab=${t.value}${initialActiveId ? `&c=${initialActiveId}` : ""}`}
+                  className={`rounded-full px-2.5 py-1 font-display text-[10px] font-bold uppercase tracking-widest ${
+                    tab === t.value
+                      ? "bg-forest-green text-card"
+                      : "bg-forest-green/[0.06] text-forest-green/60 hover:text-forest-green"
+                  }`}
+                >
+                  {t.label}
+                </a>
+              ))}
+            </div>
+          )}
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
-          {filteredConversations.length === 0 ? (
+          {listCollapsed ? (
+            // Modo colapsado: tira só os avatares. Hover/click ainda navega.
+            filteredConversations.map((c) => {
+              const member = c.member;
+              const name = member?.name ?? c.display_name ?? formatPhone(c.phone);
+              const isActive = c.id === initialActiveId;
+              return (
+                <a
+                  key={c.id}
+                  href={`/dashboard/whatsapp?tab=${tab}&c=${c.id}`}
+                  title={name}
+                  className={`flex items-center justify-center border-b border-forest-green/5 py-2.5 ${
+                    isActive ? "bg-forest-green/[0.06]" : "hover:bg-forest-green/[0.03]"
+                  }`}
+                >
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-action-green to-forest-green font-display text-[10px] text-card">
+                    {initials(name)}
+                  </span>
+                </a>
+              );
+            })
+          ) : filteredConversations.length === 0 ? (
             <p className="p-6 font-sans text-sm text-forest-green/50">Nenhuma conversa nesta aba.</p>
           ) : (
             filteredConversations.map((c) => {
@@ -200,11 +253,11 @@ export function WhatsAppShell({
                 <a
                   key={c.id}
                   href={`/dashboard/whatsapp?tab=${tab}&c=${c.id}`}
-                  className={`flex items-start gap-3 border-b border-forest-green/5 p-4 text-left ${
+                  className={`flex items-start gap-3 border-b border-forest-green/5 p-3 text-left ${
                     isActive ? "bg-forest-green/[0.06]" : "hover:bg-forest-green/[0.03]"
                   }`}
                 >
-                  <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-action-green to-forest-green font-display text-xs text-card">
+                  <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-action-green to-forest-green font-display text-[10px] text-card">
                     {initials(name)}
                   </span>
                   <div className="flex-1 overflow-hidden">
