@@ -98,85 +98,119 @@ export function WhatsAppShell({
     stickToBottomRef.current = distanceFromBottom < NEAR_BOTTOM_PX;
   };
 
+  // Estado da conexão realtime — exposto na UI pra diagnóstico.
+  const [rtStatus, setRtStatus] = useState<"connecting" | "live" | "error">("connecting");
+
   // Realtime — atualiza estado direto do payload, sem ir no servidor.
   useEffect(() => {
     const supabase = createClient();
-    const channel = supabase
-      .channel(`whatsapp:${workspaceId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "whatsapp_messages",
-          filter: `workspace_id=eq.${workspaceId}`,
-        },
-        (payload) => {
-          const msg = payload.new as Message & { conversation_id: string };
-          setConversations((prev) => {
-            const idx = prev.findIndex((c) => c.id === msg.conversation_id);
-            if (idx === -1) return prev;
-            const preview = (msg.body ?? "").slice(0, 120) || previewForType(msg.type);
-            const updated: Conversation = {
-              ...prev[idx],
-              last_message_at: msg.created_at,
-              last_preview: preview,
-            };
-            return [updated, ...prev.slice(0, idx), ...prev.slice(idx + 1)];
-          });
-          if (initialActiveId === msg.conversation_id) {
-            setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
-          }
-        },
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "whatsapp_messages",
-          filter: `workspace_id=eq.${workspaceId}`,
-        },
-        (payload) => {
-          const msg = payload.new as Message & { conversation_id: string };
-          if (initialActiveId === msg.conversation_id) {
-            setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, ...msg } : m)));
-          }
-        },
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "whatsapp_conversations",
-          filter: `workspace_id=eq.${workspaceId}`,
-        },
-        (payload) => {
-          if (payload.eventType === "INSERT") {
-            const conv = payload.new as Omit<Conversation, "member">;
-            setConversations((prev) =>
-              prev.some((c) => c.id === conv.id) ? prev : [{ ...conv, member: null }, ...prev],
-            );
-          } else if (payload.eventType === "UPDATE") {
-            const conv = payload.new as Omit<Conversation, "member">;
-            setConversations((prev) =>
-              prev.map((c) => (c.id === conv.id ? { ...c, ...conv, member: c.member } : c)),
-            );
-          } else if (payload.eventType === "DELETE") {
-            const conv = payload.old as { id: string };
-            setConversations((prev) => prev.filter((c) => c.id !== conv.id));
-          }
-        },
-      )
-      .subscribe((status) => {
-        if (process.env.NODE_ENV !== "production") {
-          console.log("[wa realtime]", status);
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let cancelled = false;
+
+    const init = async () => {
+      // Garante que o cliente realtime está autenticado com JWT do usuário.
+      // Sem isso, RLS no Postgres bloqueia eventos com filtro por workspace_id.
+      // @supabase/ssr não propaga o token pro realtime automaticamente em todas
+      // as situações — fazer manualmente é a forma confiável.
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          await supabase.realtime.setAuth(session.access_token);
         }
-      });
+      } catch (err) {
+        console.error("[wa realtime] setAuth failed:", err);
+      }
+
+      if (cancelled) return;
+
+      channel = supabase
+        .channel(`whatsapp:${workspaceId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "whatsapp_messages",
+            filter: `workspace_id=eq.${workspaceId}`,
+          },
+          (payload) => {
+            console.log("[wa realtime] msg INSERT", payload.new);
+            const msg = payload.new as Message & { conversation_id: string };
+            setConversations((prev) => {
+              const idx = prev.findIndex((c) => c.id === msg.conversation_id);
+              if (idx === -1) return prev;
+              const preview = (msg.body ?? "").slice(0, 120) || previewForType(msg.type);
+              const updated: Conversation = {
+                ...prev[idx],
+                last_message_at: msg.created_at,
+                last_preview: preview,
+              };
+              return [updated, ...prev.slice(0, idx), ...prev.slice(idx + 1)];
+            });
+            if (initialActiveId === msg.conversation_id) {
+              setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
+            }
+          },
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "whatsapp_messages",
+            filter: `workspace_id=eq.${workspaceId}`,
+          },
+          (payload) => {
+            const msg = payload.new as Message & { conversation_id: string };
+            if (initialActiveId === msg.conversation_id) {
+              setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, ...msg } : m)));
+            }
+          },
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "whatsapp_conversations",
+            filter: `workspace_id=eq.${workspaceId}`,
+          },
+          (payload) => {
+            console.log("[wa realtime] conv", payload.eventType, payload.new ?? payload.old);
+            if (payload.eventType === "INSERT") {
+              const conv = payload.new as Omit<Conversation, "member">;
+              setConversations((prev) =>
+                prev.some((c) => c.id === conv.id) ? prev : [{ ...conv, member: null }, ...prev],
+              );
+            } else if (payload.eventType === "UPDATE") {
+              const conv = payload.new as Omit<Conversation, "member">;
+              setConversations((prev) =>
+                prev.map((c) => (c.id === conv.id ? { ...c, ...conv, member: c.member } : c)),
+              );
+            } else if (payload.eventType === "DELETE") {
+              const conv = payload.old as { id: string };
+              setConversations((prev) => prev.filter((c) => c.id !== conv.id));
+            }
+          },
+        )
+        .subscribe((status, err) => {
+          console.log("[wa realtime] status:", status, err ?? "");
+          if (status === "SUBSCRIBED") setRtStatus("live");
+          else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+            setRtStatus("error");
+          } else {
+            setRtStatus("connecting");
+          }
+        });
+    };
+
+    init();
 
     return () => {
-      supabase.removeChannel(channel);
+      cancelled = true;
+      if (channel) supabase.removeChannel(channel);
     };
   }, [workspaceId, initialActiveId, router]);
 
@@ -381,6 +415,7 @@ export function WhatsAppShell({
                 </p>
               </div>
               <div className="flex flex-shrink-0 items-center gap-3">
+                <RealtimeBadge status={rtStatus} />
                 <span className="rounded-full bg-forest-green/10 px-3 py-1 font-display text-[10px] font-bold uppercase tracking-widest text-forest-green/70">
                   {activeConversation.status}
                 </span>
@@ -439,6 +474,23 @@ export function WhatsAppShell({
         )}
       </aside>
     </div>
+  );
+}
+
+function RealtimeBadge({ status }: { status: "connecting" | "live" | "error" }) {
+  const cfg = {
+    connecting: { dot: "bg-yellow-400 animate-pulse", label: "Conectando" },
+    live: { dot: "bg-action-green", label: "Tempo real" },
+    error: { dot: "bg-red-500", label: "Sem realtime — atualize F5" },
+  }[status];
+  return (
+    <span
+      title={cfg.label}
+      className="flex items-center gap-1.5 rounded-full bg-forest-green/[0.04] px-2 py-1"
+    >
+      <span className={`h-1.5 w-1.5 rounded-full ${cfg.dot}`} />
+      <span className="font-sans text-[10px] text-forest-green/60">{cfg.label}</span>
+    </span>
   );
 }
 
