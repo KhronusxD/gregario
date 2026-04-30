@@ -14,6 +14,7 @@ export type Conversation = {
   id: string;
   phone: string;
   display_name: string | null;
+  avatar_url: string | null;
   status: string;
   last_message_at: string | null;
   last_preview: string | null;
@@ -349,9 +350,7 @@ export function WhatsAppShell({
                     isActive ? "bg-forest-green/[0.06]" : "hover:bg-forest-green/[0.03]"
                   }`}
                 >
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-action-green to-forest-green font-display text-[10px] text-card">
-                    {initials(name)}
-                  </span>
+                  <Avatar url={c.avatar_url} name={name} size="sm" />
                 </a>
               );
             })
@@ -372,9 +371,7 @@ export function WhatsAppShell({
                     isActive ? "bg-forest-green/[0.06]" : "hover:bg-forest-green/[0.03]"
                   }`}
                 >
-                  <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-action-green to-forest-green font-display text-[10px] text-card">
-                    {initials(name)}
-                  </span>
+                  <Avatar url={c.avatar_url} name={name} size="md" />
                   <div className="flex-1 overflow-hidden">
                     <div className="flex items-baseline justify-between gap-2">
                       <p className="truncate font-display text-sm font-bold text-forest-green">
@@ -404,15 +401,26 @@ export function WhatsAppShell({
         ) : (
           <>
             <header className="flex flex-shrink-0 items-center justify-between border-b border-forest-green/5 p-3">
-              <div className="min-w-0">
-                <p className="truncate font-display text-sm font-bold text-forest-green">
-                  {activeMember?.name ??
+              <div className="flex min-w-0 items-center gap-3">
+                <Avatar
+                  url={activeConversation.avatar_url}
+                  name={
+                    activeMember?.name ??
                     activeConversation.display_name ??
-                    formatPhone(activeConversation.phone)}
-                </p>
-                <p className="font-sans text-xs text-forest-green/60">
-                  {formatPhone(activeConversation.phone)}
-                </p>
+                    formatPhone(activeConversation.phone)
+                  }
+                  size="md"
+                />
+                <div className="min-w-0">
+                  <p className="truncate font-display text-sm font-bold text-forest-green">
+                    {activeMember?.name ??
+                      activeConversation.display_name ??
+                      formatPhone(activeConversation.phone)}
+                  </p>
+                  <p className="font-sans text-xs text-forest-green/60">
+                    {formatPhone(activeConversation.phone)}
+                  </p>
+                </div>
               </div>
               <div className="flex flex-shrink-0 items-center gap-3">
                 <RealtimeBadge status={rtStatus} />
@@ -450,9 +458,7 @@ export function WhatsAppShell({
         ) : (
           <>
             <div className="mb-4 flex items-center gap-3">
-              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-action-green to-forest-green font-display text-sm text-card">
-                {initials(activeMember.name)}
-              </span>
+              <Avatar url={activeConversation?.avatar_url} name={activeMember.name} size="lg" />
               <div>
                 <p className="font-display text-sm font-bold text-forest-green">{activeMember.name}</p>
                 <p className="font-sans text-xs text-forest-green/60">{formatPhone(activeMember.phone)}</p>
@@ -474,6 +480,42 @@ export function WhatsAppShell({
         )}
       </aside>
     </div>
+  );
+}
+
+function Avatar({
+  url,
+  name,
+  size = "md",
+}: {
+  url: string | null | undefined;
+  name: string;
+  size?: "sm" | "md" | "lg";
+}) {
+  const [errored, setErrored] = useState(false);
+  const cls = {
+    sm: "h-8 w-8 text-[10px]",
+    md: "h-9 w-9 text-[10px]",
+    lg: "h-12 w-12 text-sm",
+  }[size];
+
+  if (url && !errored) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={url}
+        alt={name}
+        onError={() => setErrored(true)}
+        className={`${cls} flex-shrink-0 rounded-full object-cover`}
+      />
+    );
+  }
+  return (
+    <span
+      className={`${cls} flex flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-action-green to-forest-green font-display text-card`}
+    >
+      {initials(name)}
+    </span>
   );
 }
 

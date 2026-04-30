@@ -17,7 +17,7 @@ export default async function WhatsAppPage({
   const { data: conversationsRaw, error: convError } = await supabase
     .from("whatsapp_conversations")
     .select(
-      "id, phone, display_name, status, last_message_at, last_preview, member:member_id(id, name, phone, status)",
+      "id, phone, display_name, avatar_url, status, last_message_at, last_preview, member:member_id(id, name, phone, status)",
     )
     .eq("workspace_id", ctx.workspace.id)
     .order("last_message_at", { ascending: false, nullsFirst: false })
@@ -30,6 +30,7 @@ export default async function WhatsAppPage({
     id: string;
     phone: string;
     display_name: string | null;
+    avatar_url: string | null;
     status: string;
     last_message_at: string | null;
     last_preview: string | null;

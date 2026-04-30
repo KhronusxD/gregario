@@ -246,6 +246,35 @@ export async function fetchInstanceInfo(instanceName: string): Promise<{
   };
 }
 
+/**
+ * Foto de perfil de um contato. Evolution v2 expõe via
+ * POST /chat/fetchProfilePictureUrl/{instance}, body { number }.
+ * O número aceito pelo Evolution é o JID puro ("5511999...@s.whatsapp.net")
+ * ou só os dígitos — mandamos só dígitos. Retorna URL com TTL (foto de perfil
+ * do WhatsApp Cloud), por isso vale re-fetchar periodicamente.
+ */
+export async function fetchProfilePicture(
+  instanceName: string,
+  phone: string,
+): Promise<string | null> {
+  if (!BASE || !KEY) return null;
+  try {
+    const digits = phone.replace(/\D/g, "");
+    const res = await fetch(`${BASE}/chat/fetchProfilePictureUrl/${instanceName}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: KEY },
+      body: JSON.stringify({ number: digits }),
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const json = (await res.json()) as { profilePictureUrl?: string; profilePicUrl?: string };
+    return json.profilePictureUrl ?? json.profilePicUrl ?? null;
+  } catch (err) {
+    console.error("[fetchProfilePicture] error:", err);
+    return null;
+  }
+}
+
 export async function logoutInstance(instanceName: string): Promise<void> {
   if (!BASE || !KEY) throw new Error("Evolution API não configurada");
   const res = await fetch(`${BASE}/instance/logout/${instanceName}`, {

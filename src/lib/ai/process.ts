@@ -11,22 +11,37 @@ type ConversationRow = {
   workspace_id: string;
   phone: string;
   ia_active: boolean;
+  display_name?: string | null;
+  avatar_url?: string | null;
   __created?: boolean;
 };
 
 export async function getOrCreateConversation(params: {
   workspaceId: string;
   phone: string;
+  pushName?: string | null;
 }): Promise<ConversationRow> {
   const supabase = createAdminClient();
   const { data: existing } = await supabase
     .from("whatsapp_conversations")
-    .select("id, workspace_id, phone, ia_active")
+    .select("id, workspace_id, phone, ia_active, display_name, avatar_url")
     .eq("workspace_id", params.workspaceId)
     .eq("phone", params.phone)
     .maybeSingle();
 
-  if (existing) return existing as ConversationRow;
+  if (existing) {
+    const row = existing as ConversationRow;
+    // Atualiza display_name se temos pushName novo e o atual está vazio
+    // (ou diferente do que veio agora — o usuário pode ter trocado o nome no WhatsApp).
+    if (params.pushName && params.pushName !== row.display_name) {
+      await supabase
+        .from("whatsapp_conversations")
+        .update({ display_name: params.pushName } as never)
+        .eq("id", row.id);
+      row.display_name = params.pushName;
+    }
+    return row;
+  }
 
   const { data: created, error } = await supabase
     .from("whatsapp_conversations")
@@ -36,8 +51,9 @@ export async function getOrCreateConversation(params: {
       status: "bot",
       ia_active: true,
       last_message_at: new Date().toISOString(),
+      display_name: params.pushName ?? null,
     } as never)
-    .select("id, workspace_id, phone, ia_active")
+    .select("id, workspace_id, phone, ia_active, display_name, avatar_url")
     .single();
 
   if (error || !created) throw new Error(`createConversation failed: ${error?.message}`);

@@ -9,6 +9,7 @@ import { runAgentOnQueue } from "@/lib/ai/runner";
 import { isEcho } from "@/lib/ai/echo";
 import { processInboundMedia } from "@/lib/ai/media-processor";
 import { triggerFlows } from "@/lib/ai/flow-runner";
+import { fetchProfilePicture } from "@/lib/whatsapp/evolution";
 
 type EvolutionMediaMsg = { url?: string; mediaUrl?: string; mimetype?: string; caption?: string };
 
@@ -135,7 +136,21 @@ async function handleEvolutionEvent(payload: EvolutionPayload) {
     return;
   }
 
-  const conversation = await getOrCreateConversation({ workspaceId: ws.id, phone });
+  const conversation = await getOrCreateConversation({
+    workspaceId: ws.id,
+    phone,
+    pushName: data.pushName ?? null,
+  });
+
+  // Fetch foto de perfil em background (não bloqueia processamento da msg).
+  // Re-fetcha se nunca buscou OU se faz mais de 24h (URLs do WhatsApp expiram).
+  void maybeFetchAvatar({
+    workspaceId: ws.id,
+    instance,
+    conversationId: conversation.id,
+    phone,
+    currentAvatar: conversation.avatar_url,
+  });
 
   // Outbound (fromMe) — humano respondeu pelo celular
   if (data.key?.fromMe) {
@@ -302,6 +317,27 @@ async function handleEvolutionEvent(payload: EvolutionPayload) {
     phone,
     debounceSeconds: settings.debounce_seconds,
   });
+}
+
+async function maybeFetchAvatar(params: {
+  workspaceId: string;
+  instance: string;
+  conversationId: string;
+  phone: string;
+  currentAvatar: string | null | undefined;
+}) {
+  if (params.currentAvatar) return; // já temos — re-fetch periódico fica pra outra hora
+  try {
+    const url = await fetchProfilePicture(params.instance, params.phone);
+    if (!url) return;
+    const supabase = createAdminClient();
+    await supabase
+      .from("whatsapp_conversations")
+      .update({ avatar_url: url, avatar_fetched_at: new Date().toISOString() } as never)
+      .eq("id", params.conversationId);
+  } catch (err) {
+    console.error("[maybeFetchAvatar] error:", err);
+  }
 }
 
 function scheduleProcessing(params: {
