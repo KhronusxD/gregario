@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { initials, formatPhone } from "@/lib/members";
@@ -48,6 +48,8 @@ const TABS = [
   { value: "bot", label: "Bot ativo" },
 ];
 
+const NEAR_BOTTOM_PX = 120;
+
 export function WhatsAppShell({
   workspaceId,
   initialConversations,
@@ -59,9 +61,13 @@ export function WhatsAppShell({
   const router = useRouter();
   const [conversations, setConversations] = useState<Conversation[]>(initialConversations);
   const [messages, setMessages] = useState<Message[]>(initialMessages);
+  const [search, setSearch] = useState("");
   const messagesScrollRef = useRef<HTMLDivElement>(null);
+  // Se o usuário rolou pra cima pra ler histórico, paramos de auto-scroll
+  // até ele voltar perto do fim. Default true (na chegada do chat).
+  const stickToBottomRef = useRef(true);
 
-  // Quando navegação acontece (URL muda), sincroniza estado com o que o servidor mandou.
+  // Sincroniza estado com props quando navegação muda URL.
   useEffect(() => {
     setConversations(initialConversations);
   }, [initialConversations]);
@@ -69,12 +75,28 @@ export function WhatsAppShell({
     setMessages(initialMessages);
   }, [initialMessages]);
 
-  // Auto-scroll do chat: rola pro fim quando mensagens mudam (ou conversa muda).
+  // Toda vez que a conversa ativa muda, força ir pro fim.
   useEffect(() => {
+    stickToBottomRef.current = true;
+    requestAnimationFrame(() => {
+      const el = messagesScrollRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    });
+  }, [initialActiveId]);
+
+  // Auto-scroll quando chega mensagem nova — só se o usuário estiver perto do fim.
+  useEffect(() => {
+    if (!stickToBottomRef.current) return;
+    const el = messagesScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [messages]);
+
+  const onMessagesScroll = () => {
     const el = messagesScrollRef.current;
     if (!el) return;
-    el.scrollTop = el.scrollHeight;
-  }, [messages, initialActiveId]);
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    stickToBottomRef.current = distanceFromBottom < NEAR_BOTTOM_PX;
+  };
 
   // Realtime — atualiza estado direto do payload, sem ir no servidor.
   useEffect(() => {
@@ -91,10 +113,9 @@ export function WhatsAppShell({
         },
         (payload) => {
           const msg = payload.new as Message & { conversation_id: string };
-          // Lista: bumpa conversa pro topo com novo preview.
           setConversations((prev) => {
             const idx = prev.findIndex((c) => c.id === msg.conversation_id);
-            if (idx === -1) return prev; // conversa nova ainda não está na lista — INSERT da conversa cuidará
+            if (idx === -1) return prev;
             const preview = (msg.body ?? "").slice(0, 120) || previewForType(msg.type);
             const updated: Conversation = {
               ...prev[idx],
@@ -103,7 +124,6 @@ export function WhatsAppShell({
             };
             return [updated, ...prev.slice(0, idx), ...prev.slice(idx + 1)];
           });
-          // Chat ativo: anexa.
           if (initialActiveId === msg.conversation_id) {
             setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
           }
@@ -161,10 +181,23 @@ export function WhatsAppShell({
   }, [workspaceId, initialActiveId, router]);
 
   const filteredConversations = useMemo(() => {
-    if (tab === "human") return conversations.filter((c) => c.status === "human");
-    if (tab === "bot") return conversations.filter((c) => c.status === "bot");
-    return conversations;
-  }, [conversations, tab]);
+    let list = conversations;
+    if (tab === "human") list = list.filter((c) => c.status === "human");
+    else if (tab === "bot") list = list.filter((c) => c.status === "bot");
+    const q = search.trim().toLowerCase();
+    if (q) {
+      const qDigits = q.replace(/\D/g, "");
+      list = list.filter((c) => {
+        const name = c.member?.name ?? c.display_name ?? c.phone;
+        return (
+          name.toLowerCase().includes(q) ||
+          (qDigits && c.phone.includes(qDigits)) ||
+          (c.last_preview ?? "").toLowerCase().includes(q)
+        );
+      });
+    }
+    return list;
+  }, [conversations, tab, search]);
 
   const activeConversation = conversations.find((c) => c.id === initialActiveId) ?? null;
   const activeMember: Member = initialMember ?? activeConversation?.member ?? null;
@@ -187,42 +220,88 @@ export function WhatsAppShell({
     <div className={`grid min-h-0 flex-1 ${gridCols} gap-3 overflow-hidden rounded-lg bg-card shadow-card`}>
       {/* Coluna 1: lista (colapsável) */}
       <aside className="flex min-h-0 flex-col overflow-hidden border-r border-forest-green/5">
-        <div className={`flex flex-shrink-0 items-center gap-2 border-b border-forest-green/5 ${listCollapsed ? "justify-center p-2" : "p-3"}`}>
-          <button
-            type="button"
-            onClick={() => setListCollapsed((v) => !v)}
-            aria-label={listCollapsed ? "Expandir lista" : "Recolher lista"}
-            className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md text-forest-green/60 hover:bg-forest-green/[0.06] hover:text-forest-green"
-          >
-            <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              {listCollapsed ? (
-                <polyline points="9 18 15 12 9 6" />
-              ) : (
-                <polyline points="15 18 9 12 15 6" />
-              )}
-            </svg>
-          </button>
+        <div
+          className={`flex flex-shrink-0 flex-col gap-2 border-b border-forest-green/5 ${
+            listCollapsed ? "p-2" : "p-3"
+          }`}
+        >
+          <div className={`flex items-center gap-2 ${listCollapsed ? "justify-center" : ""}`}>
+            <button
+              type="button"
+              onClick={() => setListCollapsed((v) => !v)}
+              aria-label={listCollapsed ? "Expandir lista" : "Recolher lista"}
+              className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md text-forest-green/60 hover:bg-forest-green/[0.06] hover:text-forest-green"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                className="h-4 w-4"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                {listCollapsed ? (
+                  <polyline points="9 18 15 12 9 6" />
+                ) : (
+                  <polyline points="15 18 9 12 15 6" />
+                )}
+              </svg>
+            </button>
+            {!listCollapsed && (
+              <div className="flex flex-1 gap-1.5">
+                {TABS.map((t) => (
+                  <a
+                    key={t.value}
+                    href={`/dashboard/whatsapp?tab=${t.value}${
+                      initialActiveId ? `&c=${initialActiveId}` : ""
+                    }`}
+                    className={`rounded-full px-2.5 py-1 font-display text-[10px] font-bold uppercase tracking-widest ${
+                      tab === t.value
+                        ? "bg-forest-green text-card"
+                        : "bg-forest-green/[0.06] text-forest-green/60 hover:text-forest-green"
+                    }`}
+                  >
+                    {t.label}
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
           {!listCollapsed && (
-            <div className="flex flex-1 gap-1.5">
-              {TABS.map((t) => (
-                <a
-                  key={t.value}
-                  href={`/dashboard/whatsapp?tab=${t.value}${initialActiveId ? `&c=${initialActiveId}` : ""}`}
-                  className={`rounded-full px-2.5 py-1 font-display text-[10px] font-bold uppercase tracking-widest ${
-                    tab === t.value
-                      ? "bg-forest-green text-card"
-                      : "bg-forest-green/[0.06] text-forest-green/60 hover:text-forest-green"
-                  }`}
+            <div className="relative">
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar nome, telefone ou mensagem…"
+                className="w-full rounded-md bg-forest-green/[0.04] px-3 py-1.5 pr-7 font-sans text-xs text-forest-green outline-none placeholder:text-forest-green/40 focus:bg-forest-green/[0.08]"
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  aria-label="Limpar busca"
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-forest-green/40 hover:bg-forest-green/10 hover:text-forest-green"
                 >
-                  {t.label}
-                </a>
-              ))}
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="h-3.5 w-3.5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                  >
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              )}
             </div>
           )}
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
           {listCollapsed ? (
-            // Modo colapsado: tira só os avatares. Hover/click ainda navega.
             filteredConversations.map((c) => {
               const member = c.member;
               const name = member?.name ?? c.display_name ?? formatPhone(c.phone);
@@ -243,7 +322,9 @@ export function WhatsAppShell({
               );
             })
           ) : filteredConversations.length === 0 ? (
-            <p className="p-6 font-sans text-sm text-forest-green/50">Nenhuma conversa nesta aba.</p>
+            <p className="p-6 font-sans text-sm text-forest-green/50">
+              {search ? "Nada encontrado pra essa busca." : "Nenhuma conversa nesta aba."}
+            </p>
           ) : (
             filteredConversations.map((c) => {
               const member = c.member;
@@ -261,8 +342,17 @@ export function WhatsAppShell({
                     {initials(name)}
                   </span>
                   <div className="flex-1 overflow-hidden">
-                    <p className="truncate font-display text-sm font-bold text-forest-green">{name}</p>
-                    <p className="truncate font-sans text-xs text-forest-green/60">{c.last_preview ?? ""}</p>
+                    <div className="flex items-baseline justify-between gap-2">
+                      <p className="truncate font-display text-sm font-bold text-forest-green">
+                        {name}
+                      </p>
+                      <span className="flex-shrink-0 font-sans text-[10px] text-forest-green/40">
+                        {relativeTime(c.last_message_at)}
+                      </span>
+                    </div>
+                    <p className="truncate font-sans text-xs text-forest-green/60">
+                      {c.last_preview ?? ""}
+                    </p>
                   </div>
                 </a>
               );
@@ -279,25 +369,36 @@ export function WhatsAppShell({
           </div>
         ) : (
           <>
-            <header className="flex flex-shrink-0 items-center justify-between border-b border-forest-green/5 p-4">
-              <div>
-                <p className="font-display text-sm font-bold text-forest-green">
-                  {activeMember?.name ?? activeConversation.display_name ?? formatPhone(activeConversation.phone)}
+            <header className="flex flex-shrink-0 items-center justify-between border-b border-forest-green/5 p-3">
+              <div className="min-w-0">
+                <p className="truncate font-display text-sm font-bold text-forest-green">
+                  {activeMember?.name ??
+                    activeConversation.display_name ??
+                    formatPhone(activeConversation.phone)}
                 </p>
-                <p className="font-sans text-xs text-forest-green/60">{formatPhone(activeConversation.phone)}</p>
+                <p className="font-sans text-xs text-forest-green/60">
+                  {formatPhone(activeConversation.phone)}
+                </p>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-shrink-0 items-center gap-3">
                 <span className="rounded-full bg-forest-green/10 px-3 py-1 font-display text-[10px] font-bold uppercase tracking-widest text-forest-green/70">
                   {activeConversation.status}
                 </span>
-                <ConversationControls conversationId={activeConversation.id} status={activeConversation.status} />
+                <ConversationControls
+                  conversationId={activeConversation.id}
+                  status={activeConversation.status}
+                />
               </div>
             </header>
-            <div ref={messagesScrollRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-surface p-6">
+            <div
+              ref={messagesScrollRef}
+              onScroll={onMessagesScroll}
+              className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-surface p-6"
+            >
               {messages.length === 0 ? (
                 <p className="font-sans text-sm text-forest-green/50">Sem mensagens.</p>
               ) : (
-                messages.map((m) => <MessageBubble key={m.id} msg={m} />)
+                renderMessagesWithDateSeparators(messages)
               )}
             </div>
             <div className="flex-shrink-0">
@@ -339,6 +440,68 @@ export function WhatsAppShell({
       </aside>
     </div>
   );
+}
+
+function renderMessagesWithDateSeparators(messages: Message[]) {
+  let lastKey = "";
+  return messages.map((m) => {
+    const date = new Date(m.created_at);
+    const dayKey = date.toDateString();
+    const showSeparator = dayKey !== lastKey;
+    lastKey = dayKey;
+    return (
+      <Fragment key={m.id}>
+        {showSeparator && (
+          <div className="flex justify-center py-1">
+            <span className="rounded-full bg-forest-green/10 px-3 py-0.5 font-display text-[10px] font-bold uppercase tracking-widest text-forest-green/60">
+              {formatDateSeparator(date)}
+            </span>
+          </div>
+        )}
+        <MessageBubble msg={m} />
+      </Fragment>
+    );
+  });
+}
+
+function formatDateSeparator(date: Date): string {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const that = new Date(date);
+  that.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((today.getTime() - that.getTime()) / 86400000);
+  if (diffDays === 0) return "Hoje";
+  if (diffDays === 1) return "Ontem";
+  if (diffDays > 0 && diffDays < 7) {
+    return that.toLocaleDateString("pt-BR", { weekday: "long" });
+  }
+  return that.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: that.getFullYear() === today.getFullYear() ? undefined : "numeric",
+  });
+}
+
+function relativeTime(iso: string | null): string {
+  if (!iso) return "";
+  const date = new Date(iso);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return "agora";
+  if (diffMin < 60) return `${diffMin}min`;
+  const diffHour = Math.floor(diffMin / 60);
+  if (diffHour < 24) return `${diffHour}h`;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const that = new Date(date);
+  that.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((today.getTime() - that.getTime()) / 86400000);
+  if (diffDays === 1) return "ontem";
+  if (diffDays < 7) {
+    return that.toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", "");
+  }
+  return that.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
 }
 
 function previewForType(type: string | null | undefined): string {
