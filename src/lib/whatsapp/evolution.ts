@@ -247,6 +247,43 @@ export async function fetchInstanceInfo(instanceName: string): Promise<{
 }
 
 /**
+ * Perfil completo (nome + foto) de um contato. Evolution v2:
+ * POST /chat/fetchProfile/{instance} body { number }.
+ * Retorna shape variável entre versões — leitura defensiva.
+ */
+export async function fetchContactProfile(
+  instanceName: string,
+  phone: string,
+): Promise<{ name: string | null; pictureUrl: string | null } | null> {
+  if (!BASE || !KEY) return null;
+  try {
+    const digits = phone.replace(/\D/g, "");
+    const res = await fetch(`${BASE}/chat/fetchProfile/${instanceName}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: KEY },
+      body: JSON.stringify({ number: digits }),
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const json = (await res.json()) as {
+      name?: string;
+      pushName?: string;
+      profileName?: string;
+      picture?: string;
+      profilePictureUrl?: string;
+      profilePicUrl?: string;
+    };
+    return {
+      name: json.name ?? json.pushName ?? json.profileName ?? null,
+      pictureUrl: json.picture ?? json.profilePictureUrl ?? json.profilePicUrl ?? null,
+    };
+  } catch (err) {
+    console.error("[fetchContactProfile] error:", err);
+    return null;
+  }
+}
+
+/**
  * Foto de perfil de um contato. Evolution v2 expõe via
  * POST /chat/fetchProfilePictureUrl/{instance}, body { number }.
  * O número aceito pelo Evolution é o JID puro ("5511999...@s.whatsapp.net")

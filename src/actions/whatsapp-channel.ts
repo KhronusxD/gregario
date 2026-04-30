@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   createEvolutionInstance,
   deleteInstance,
+  fetchContactProfile,
   getInstanceQr,
   getInstanceStatus,
   getInstanceWebhook,
@@ -210,4 +211,91 @@ export async function getChannelQrAction(): Promise<{ base64: string | null; pai
   } catch (e) {
     return { base64: null, pairingCode: null, message: e instanceof Error ? e.message : "Falha" };
   }
+}
+
+export type BackfillResult = {
+  ok: boolean;
+  message: string | null;
+  scanned?: number;
+  updated?: number;
+  failed?: number;
+};
+
+/**
+ * Varre as conversas do workspace e busca nome (display_name) e foto
+ * (avatar_url) via Evolution pra cada contato. Concorrência limitada
+ * em CONCURRENCY pra não inundar a Evolution.
+ *
+ * Pula contatos que já têm os 2 campos preenchidos.
+ */
+const CONCURRENCY = 5;
+
+export async function backfillContactsAction(
+  _prev: BackfillResult,
+  _fd: FormData,
+): Promise<BackfillResult> {
+  const { workspaceId, instance } = await loadInstance();
+  if (!instance) return { ok: false, message: "Canal WhatsApp não conectado" };
+
+  const supabase = createAdminClient();
+  const { data: rows, error } = await supabase
+    .from("whatsapp_conversations")
+    .select("id, phone, display_name, avatar_url")
+    .eq("workspace_id", workspaceId)
+    .order("last_message_at", { ascending: false, nullsFirst: false })
+    .limit(500);
+
+  if (error) return { ok: false, message: error.message };
+
+  const list = (rows ?? []) as Array<{
+    id: string;
+    phone: string;
+    display_name: string | null;
+    avatar_url: string | null;
+  }>;
+  const pending = list.filter((c) => !c.display_name || !c.avatar_url);
+
+  let updated = 0;
+  let failed = 0;
+
+  const queue = [...pending];
+  async function worker() {
+    while (queue.length > 0) {
+      const c = queue.shift();
+      if (!c) return;
+      try {
+        const profile = await fetchContactProfile(instance!, c.phone);
+        if (!profile) {
+          failed++;
+          continue;
+        }
+        const patch: Record<string, unknown> = {};
+        if (!c.display_name && profile.name) patch.display_name = profile.name;
+        if (!c.avatar_url && profile.pictureUrl) {
+          patch.avatar_url = profile.pictureUrl;
+          patch.avatar_fetched_at = new Date().toISOString();
+        }
+        if (Object.keys(patch).length === 0) continue;
+        const { error: upErr } = await supabase
+          .from("whatsapp_conversations")
+          .update(patch as never)
+          .eq("id", c.id);
+        if (upErr) failed++;
+        else updated++;
+      } catch {
+        failed++;
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
+
+  revalidatePath("/dashboard/whatsapp");
+  return {
+    ok: true,
+    message: `${updated} atualizada(s) · ${failed} falha(s)`,
+    scanned: pending.length,
+    updated,
+    failed,
+  };
 }
