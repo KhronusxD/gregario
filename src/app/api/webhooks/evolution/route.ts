@@ -136,10 +136,12 @@ async function handleEvolutionEvent(payload: EvolutionPayload) {
     return;
   }
 
+  // pushName em mensagens outbound (fromMe=true) é o nome da PRÓPRIA igreja
+  // (sender), não do contato. Só salvamos pushName quando é inbound.
   const conversation = await getOrCreateConversation({
     workspaceId: ws.id,
     phone,
-    pushName: data.pushName ?? null,
+    pushName: data.key?.fromMe ? null : data.pushName ?? null,
   });
 
   // Fetch foto de perfil em background (não bloqueia processamento da msg).
