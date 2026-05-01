@@ -11,6 +11,7 @@ type ConversationRow = {
   workspace_id: string;
   phone: string;
   ia_active: boolean;
+  ia_disabled?: boolean;
   display_name?: string | null;
   avatar_url?: string | null;
   __created?: boolean;
@@ -24,7 +25,7 @@ export async function getOrCreateConversation(params: {
   const supabase = createAdminClient();
   const { data: existing } = await supabase
     .from("whatsapp_conversations")
-    .select("id, workspace_id, phone, ia_active, display_name, avatar_url")
+    .select("id, workspace_id, phone, ia_active, ia_disabled, display_name, avatar_url")
     .eq("workspace_id", params.workspaceId)
     .eq("phone", params.phone)
     .maybeSingle();
@@ -53,7 +54,7 @@ export async function getOrCreateConversation(params: {
       last_message_at: new Date().toISOString(),
       display_name: params.pushName ?? null,
     } as never)
-    .select("id, workspace_id, phone, ia_active, display_name, avatar_url")
+    .select("id, workspace_id, phone, ia_active, ia_disabled, display_name, avatar_url")
     .single();
 
   if (error || !created) throw new Error(`createConversation failed: ${error?.message}`);

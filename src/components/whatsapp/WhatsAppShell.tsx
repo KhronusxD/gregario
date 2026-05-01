@@ -16,6 +16,7 @@ export type Conversation = {
   display_name: string | null;
   avatar_url: string | null;
   status: string;
+  ia_disabled: boolean;
   last_message_at: string | null;
   last_preview: string | null;
   member: Member;
@@ -381,9 +382,16 @@ export function WhatsAppShell({
                         {relativeTime(c.last_message_at)}
                       </span>
                     </div>
-                    <p className="truncate font-sans text-xs text-forest-green/60">
-                      {c.last_preview ?? ""}
-                    </p>
+                    <div className="flex items-center gap-1.5">
+                      {c.ia_disabled && (
+                        <span className="flex-shrink-0 rounded-sm bg-forest-green/15 px-1.5 py-0.5 font-display text-[9px] font-bold uppercase tracking-widest text-forest-green/70">
+                          Interno
+                        </span>
+                      )}
+                      <p className="flex-1 truncate font-sans text-xs text-forest-green/60">
+                        {c.last_preview ?? ""}
+                      </p>
+                    </div>
                   </div>
                 </a>
               );
@@ -424,12 +432,15 @@ export function WhatsAppShell({
               </div>
               <div className="flex flex-shrink-0 items-center gap-3">
                 <RealtimeBadge status={rtStatus} />
-                <span className="rounded-full bg-forest-green/10 px-3 py-1 font-display text-[10px] font-bold uppercase tracking-widest text-forest-green/70">
-                  {activeConversation.status}
-                </span>
+                {!activeConversation.ia_disabled && (
+                  <span className="rounded-full bg-forest-green/10 px-3 py-1 font-display text-[10px] font-bold uppercase tracking-widest text-forest-green/70">
+                    {activeConversation.status}
+                  </span>
+                )}
                 <ConversationControls
                   conversationId={activeConversation.id}
                   status={activeConversation.status}
+                  iaDisabled={activeConversation.ia_disabled}
                 />
               </div>
             </header>

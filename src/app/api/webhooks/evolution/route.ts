@@ -152,6 +152,25 @@ async function handleEvolutionEvent(payload: EvolutionPayload) {
     currentAvatar: conversation.avatar_url,
   });
 
+  // ia_disabled = contato interno marcado pelo operador. Persiste o
+  // inbound (pra aparecer no painel) mas NUNCA dispara IA.
+  if (conversation.ia_disabled && !data.key?.fromMe) {
+    const body = extractBody(data);
+    const media = extractMedia(data);
+    if (body || media) {
+      await recordInboundMessage({
+        workspaceId: ws.id,
+        conversationId: conversation.id,
+        body: media?.caption ?? body,
+        type: media?.kind,
+        mediaUrl: media?.url,
+        mediaType: media?.mimeType,
+        whatsappMsgId: data.key?.id,
+      });
+    }
+    return;
+  }
+
   // Outbound (fromMe) — humano respondeu pelo celular
   if (data.key?.fromMe) {
     const body = extractBody(data);

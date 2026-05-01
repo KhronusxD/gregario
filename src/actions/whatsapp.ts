@@ -123,3 +123,40 @@ export async function releaseToAIAction(
   revalidatePath("/dashboard/whatsapp");
   return { ok: true, message: "IA reassumiu a conversa." };
 }
+
+export async function toggleInternalContactAction(
+  _prev: WhatsAppFormState,
+  formData: FormData,
+): Promise<WhatsAppFormState> {
+  const ctx = await requireWorkspace();
+  const conversationId = (formData.get("conversationId") as string | null)?.trim();
+  const next = formData.get("next") === "true";
+  if (!conversationId) return { ok: false, message: "ID ausente" };
+
+  const supabase = createAdminClient();
+  // Marca/desmarca como interno. Quando vira interno, força status=human +
+  // ia_active=false pra não ficar pendurado em estado bot. Quando desmarca,
+  // devolve pra IA (operador pode pausar manualmente depois se quiser).
+  const updates: Record<string, unknown> = { ia_disabled: next };
+  if (next) {
+    updates.ia_active = false;
+    updates.status = "human";
+    updates.ia_resume_at = null;
+  } else {
+    updates.ia_active = true;
+    updates.status = "bot";
+  }
+
+  const { error } = await supabase
+    .from("whatsapp_conversations")
+    .update(updates as never)
+    .eq("id", conversationId)
+    .eq("workspace_id", ctx.workspace.id);
+  if (error) return { ok: false, message: error.message };
+
+  revalidatePath("/dashboard/whatsapp");
+  return {
+    ok: true,
+    message: next ? "Contato marcado como interno." : "IA reativada para esse contato.",
+  };
+}
