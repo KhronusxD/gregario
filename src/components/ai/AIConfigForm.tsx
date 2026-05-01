@@ -143,6 +143,18 @@ export function AIConfigForm({ settings }: { settings: AISettings }) {
               className="input"
             />
           </Field>
+          <Field
+            label="Mensagens automáticas a ignorar"
+            hint="Cole aqui o texto exato das respostas automáticas configuradas no WhatsApp Business (saudação, ausência). Uma por linha. Quando essas mensagens forem detectadas, a IA NÃO será pausada."
+          >
+            <textarea
+              name="ignored_auto_replies"
+              rows={4}
+              defaultValue={(settings.ignored_auto_replies ?? []).join("\n")}
+              placeholder={"Olá! Recebemos sua mensagem e responderemos em breve.\nNo momento estamos fora do horário de atendimento."}
+              className="input min-h-24"
+            />
+          </Field>
         </Section>
 
         <Section title="Novos contatos">

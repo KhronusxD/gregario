@@ -171,12 +171,18 @@ async function handleEvolutionEvent(payload: EvolutionPayload) {
     return;
   }
 
-  // Outbound (fromMe) — humano respondeu pelo celular
+  // Outbound (fromMe) — humano respondeu pelo celular OU resposta automática
+  // do WhatsApp Business. Precisamos distinguir pra não pausar IA por causa
+  // de auto-reply.
   if (data.key?.fromMe) {
     const body = extractBody(data);
     if (body && (await isEcho({ conversationId: conversation.id, body }))) {
       return; // é eco do que a IA acabou de enviar
     }
+
+    const settings = await loadAISettings(ws.id);
+    const isAutoReply = body ? matchesAutoReply(body, settings.ignored_auto_replies) : false;
+
     if (body) {
       await supabase.from("whatsapp_messages").insert({
         workspace_id: ws.id,
@@ -184,12 +190,14 @@ async function handleEvolutionEvent(payload: EvolutionPayload) {
         from_me: true,
         body,
         type: "text",
-        sent_by: "human",
+        sent_by: isAutoReply ? "system" : "human",
         ai_handled: false,
       } as never);
     }
 
-    const settings = await loadAISettings(ws.id);
+    // Auto-reply do WhatsApp Business → não conta como intervenção humana
+    if (isAutoReply) return;
+
     if (settings.pause_when_human_on_mobile) {
       await pauseAI({
         conversationId: conversation.id,
@@ -329,6 +337,20 @@ async function handleEvolutionEvent(payload: EvolutionPayload) {
     conversationId: conversation.id,
     phone,
     debounceSeconds: settings.debounce_seconds,
+  });
+}
+
+function normalize(s: string): string {
+  return s.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function matchesAutoReply(body: string, patterns: string[] | null | undefined): boolean {
+  if (!patterns || patterns.length === 0) return false;
+  const nb = normalize(body);
+  return patterns.some((p) => {
+    const np = normalize(p);
+    if (!np) return false;
+    return nb === np || nb.startsWith(np);
   });
 }
 

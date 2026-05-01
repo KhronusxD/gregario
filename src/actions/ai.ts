@@ -18,6 +18,7 @@ const SettingsSchema = z.object({
   pause_when_human_on_mobile: z.boolean().optional(),
   resume_after_escalation_min: z.coerce.number().int().min(0).max(1440).optional().nullable(),
   negative_rules: z.array(z.string()).optional(),
+  ignored_auto_replies: z.array(z.string()).optional(),
   auto_enable_for_new_contacts: z.boolean().optional(),
   debounce_seconds: z.coerce.number().int().min(5).max(30).optional(),
 });
@@ -52,6 +53,10 @@ export async function saveAISettings(_prev: AIConfigFormState, formData: FormDat
     pause_when_human_on_mobile: formData.get("pause_when_human_on_mobile") === "on",
     resume_after_escalation_min: formData.get("resume_after_escalation_min") || null,
     negative_rules: ((formData.get("negative_rules") as string) ?? "")
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean),
+    ignored_auto_replies: ((formData.get("ignored_auto_replies") as string) ?? "")
       .split("\n")
       .map((l) => l.trim())
       .filter(Boolean),

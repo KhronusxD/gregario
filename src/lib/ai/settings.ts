@@ -26,6 +26,7 @@ export type AISettings = {
   allow_image_analysis: boolean;
   notify_active: boolean;
   notify_phone: string | null;
+  ignored_auto_replies: string[];
 };
 
 const DEFAULTS: Omit<AISettings, "id" | "workspace_id"> = {
@@ -51,6 +52,7 @@ const DEFAULTS: Omit<AISettings, "id" | "workspace_id"> = {
   allow_image_analysis: true,
   notify_active: false,
   notify_phone: null,
+  ignored_auto_replies: [],
 };
 
 export async function loadAISettings(workspaceId: string): Promise<AISettings> {
