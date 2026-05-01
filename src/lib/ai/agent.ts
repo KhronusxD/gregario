@@ -25,17 +25,12 @@ export async function runAgent(params: {
 
   // Limite de mensagens por conversa
   if (settings.max_messages_per_conversation > 0 && ctx.iaMessageCount >= settings.max_messages_per_conversation) {
-    await pauseAI({ conversationId: params.conversationId });
-    const supabase = createAdminClient();
     const reason = "limite de mensagens IA atingido";
-    await supabase
-      .from("whatsapp_conversations")
-      .update({
-        status: "human",
-        handoff_reason: reason,
-        handoff_at: new Date().toISOString(),
-      } as never)
-      .eq("id", params.conversationId);
+    await pauseAI({
+      conversationId: params.conversationId,
+      workspaceId: params.workspaceId,
+      reason,
+    });
     await notifyHandoff({
       workspaceId: params.workspaceId,
       conversationId: params.conversationId,

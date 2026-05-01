@@ -75,15 +75,11 @@ async function runNode(node: FlowNode, flow: Flow, ctx: ExecContext): Promise<vo
     }
     case "transfer_human": {
       if (ctx.conversationId) {
-        const supabase = createAdminClient();
-        await pauseAI({ conversationId: ctx.conversationId });
-        await supabase
-          .from("whatsapp_conversations")
-          .update({
-            handoff_reason: String((node.data as { reason?: string })?.reason ?? "fluxo transferiu"),
-            handoff_at: new Date().toISOString(),
-          } as never)
-          .eq("id", ctx.conversationId);
+        await pauseAI({
+          conversationId: ctx.conversationId,
+          workspaceId: ctx.workspaceId,
+          reason: String((node.data as { reason?: string })?.reason ?? "fluxo transferiu"),
+        });
       }
       break;
     }

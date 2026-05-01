@@ -62,26 +62,20 @@ export async function sendOperatorMessageAction(
     return { ok: false, message: err instanceof Error ? err.message : "Falha no envio" };
   }
 
-  // Pausa IA conforme setting
+  // Pausa IA conforme setting (timer de retorno aplicado dentro do pauseAI)
   const { data: settings } = await supabase
     .from("ai_settings")
-    .select("pause_when_operator_replies, resume_after_escalation_min")
+    .select("pause_when_operator_replies")
     .eq("workspace_id", ctx.workspace.id)
     .maybeSingle();
-  const s = settings as { pause_when_operator_replies: boolean; resume_after_escalation_min: number | null } | null;
+  const s = settings as { pause_when_operator_replies: boolean } | null;
 
   if (s?.pause_when_operator_replies) {
-    await pauseAI({ conversationId: c.id });
-    if (s.resume_after_escalation_min) {
-      await supabase
-        .from("whatsapp_conversations")
-        .update({
-          ia_resume_at: new Date(Date.now() + s.resume_after_escalation_min * 60_000).toISOString(),
-          handoff_reason: "operador respondeu pelo painel",
-          handoff_at: new Date().toISOString(),
-        } as never)
-        .eq("id", c.id);
-    }
+    await pauseAI({
+      conversationId: c.id,
+      workspaceId: ctx.workspace.id,
+      reason: "operador respondeu pelo painel",
+    });
   }
 
   revalidatePath("/dashboard/whatsapp");
@@ -96,17 +90,11 @@ export async function takeoverConversationAction(
   const conversationId = (formData.get("conversationId") as string | null)?.trim();
   if (!conversationId) return { ok: false, message: "ID ausente" };
 
-  await pauseAI({ conversationId });
-  const supabase = createAdminClient();
-  await supabase
-    .from("whatsapp_conversations")
-    .update({
-      status: "human",
-      handoff_reason: "assumido manualmente",
-      handoff_at: new Date().toISOString(),
-    } as never)
-    .eq("id", conversationId)
-    .eq("workspace_id", ctx.workspace.id);
+  await pauseAI({
+    conversationId,
+    workspaceId: ctx.workspace.id,
+    reason: "assumido manualmente",
+  });
 
   revalidatePath("/dashboard/whatsapp");
   return { ok: true, message: "Você assumiu a conversa." };

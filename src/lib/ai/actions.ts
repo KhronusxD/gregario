@@ -29,15 +29,11 @@ export async function executeAction(
 
   switch (action.action) {
     case "transferir_pastor": {
-      await pauseAI({ conversationId: ctx.conversationId });
-      await supabase
-        .from("whatsapp_conversations")
-        .update({
-          status: "human",
-          handoff_reason: action.params.motivo,
-          handoff_at: new Date().toISOString(),
-        } as never)
-        .eq("id", ctx.conversationId);
+      await pauseAI({
+        conversationId: ctx.conversationId,
+        workspaceId: ctx.workspaceId,
+        reason: action.params.motivo,
+      });
       await notifyHandoff({
         workspaceId: ctx.workspaceId,
         conversationId: ctx.conversationId,

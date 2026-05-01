@@ -172,17 +172,11 @@ async function handleEvolutionEvent(payload: EvolutionPayload) {
 
     const settings = await loadAISettings(ws.id);
     if (settings.pause_when_human_on_mobile) {
-      await pauseAI({ conversationId: conversation.id });
-      if (settings.resume_after_escalation_min) {
-        await supabase
-          .from("whatsapp_conversations")
-          .update({
-            ia_resume_at: new Date(Date.now() + settings.resume_after_escalation_min * 60_000).toISOString(),
-            handoff_reason: "humano respondeu pelo celular",
-            handoff_at: new Date().toISOString(),
-          } as never)
-          .eq("id", conversation.id);
-      }
+      await pauseAI({
+        conversationId: conversation.id,
+        workspaceId: ws.id,
+        reason: "humano respondeu pelo celular",
+      });
     }
     return;
   }
