@@ -2,7 +2,6 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendMetaText } from "./meta";
 import { sendWhatsAppText as sendEvolutionText } from "./evolution";
-import { isWithinAttendanceHours } from "./hours";
 import { sleep } from "./normalize";
 
 type WorkspaceRow = {
@@ -10,15 +9,13 @@ type WorkspaceRow = {
   name: string;
   evolution_instance: string | null;
   meta_phone_number_id: string | null;
-  attendance_start: string | null;
-  attendance_end: string | null;
 };
 
 async function getWorkspace(workspaceId: string): Promise<WorkspaceRow | null> {
   const supabase = createAdminClient();
   const { data } = await supabase
     .from("workspaces")
-    .select("id, name, evolution_instance, meta_phone_number_id, attendance_start, attendance_end")
+    .select("id, name, evolution_instance, meta_phone_number_id")
     .eq("id", workspaceId)
     .maybeSingle();
   return (data as WorkspaceRow | null) ?? null;
@@ -36,11 +33,10 @@ export async function sendWithHumanDelay(params: {
   const workspace = await getWorkspace(params.workspaceId);
   if (!workspace) return;
 
-  const inHours = isWithinAttendanceHours({
-    start: workspace.attendance_start,
-    end: workspace.attendance_end,
-  });
-  if (!inHours) return;
+  // Sem gating de horário aqui — decisão de "responder ou não" pertence
+  // ao webhook (isWithinBusinessHours). Send é puramente técnico: se
+  // chegou aqui, manda. Bloquear no envio quebra inclusive resposta
+  // manual do operador fora do horário.
 
   if (!params.skipDelay) {
     const jitter = 3000 + Math.random() * 9000;

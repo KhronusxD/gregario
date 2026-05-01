@@ -76,26 +76,53 @@ export async function loadAISettings(workspaceId: string): Promise<AISettings> {
 
 const DAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as const;
 
-export function isWithinBusinessHours(settings: AISettings, workspaceHours: { start: string | null; end: string | null }): boolean {
-  const now = new Date();
-  const hhmm = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+function brHHMM(): string {
+  // Sempre comparar em horário do Brasil — servidor pode estar em UTC.
+  const fmt = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  return fmt.format(new Date());
+}
 
-  let start: string | null = null;
-  let end: string | null = null;
-
+/**
+ * Determina se a IA deve responder agora.
+ *
+ * Regra: IA responde 24/7 por DEFAULT. Restringe apenas quando o
+ * usuário opta explicitamente:
+ * - use_per_day_window=true  → restringe a janelas por dia da semana
+ * - reply_outside_hours=true → restringe a FORA do horário comercial do
+ *   workspace (especificidade pra times que só querem cobertura noturna).
+ *
+ * Se nenhuma das opções está ativa, retorna true sempre — workspace
+ * attendance_start/end NÃO bloqueiam IA implicitamente.
+ */
+export function isWithinBusinessHours(
+  settings: AISettings,
+  workspaceHours: { start: string | null; end: string | null },
+): boolean {
+  // Janela por dia da semana — config explícita da IA
   if (settings.use_per_day_window && settings.per_day_window) {
-    const day = DAYS[now.getDay()];
+    const day = DAYS[new Date().getDay()];
     const window = settings.per_day_window[day];
     if (!window?.active) return settings.reply_outside_hours;
-    start = window.start;
-    end = window.end;
-  } else {
-    start = workspaceHours.start;
-    end = workspaceHours.end;
+    const now = brHHMM();
+    const within = now >= window.start && now <= window.end;
+    return settings.reply_outside_hours ? !within : within;
   }
 
-  if (!start || !end) return true;
+  // "Responder APENAS fora do horário comercial" — usa workspace hours
+  if (settings.reply_outside_hours) {
+    if (!workspaceHours.start || !workspaceHours.end) {
+      // sem horário definido = nada pra ficar "fora" → responde sempre
+      return true;
+    }
+    const now = brHHMM();
+    return !(now >= workspaceHours.start && now <= workspaceHours.end);
+  }
 
-  const within = hhmm >= start && hhmm <= end;
-  return settings.reply_outside_hours ? !within : within;
+  // Default: IA responde 24/7
+  return true;
 }

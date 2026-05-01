@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isWithinAttendanceHours } from "@/lib/whatsapp/hours";
 import { getOrCreateConversation, recordInboundMessage } from "@/lib/ai/process";
 import { pauseAI } from "@/lib/ai/transfer";
 import { loadAISettings, isWithinBusinessHours } from "@/lib/ai/settings";
@@ -253,13 +252,7 @@ async function handleEvolutionEvent(payload: EvolutionPayload) {
   const settings = await loadAISettings(ws.id);
 
   if (!isWithinBusinessHours(settings, { start: ws.attendance_start, end: ws.attendance_end })) {
-    // Fora do horário — só salva, não responde
-    const body = extractBody(data);
-    if (body) await recordInboundMessage({ workspaceId: ws.id, conversationId: conversation.id, body });
-    return;
-  }
-  // Compat legacy (workspace attendance janela)
-  if (!isWithinAttendanceHours({ start: ws.attendance_start, end: ws.attendance_end }) && !settings.reply_outside_hours) {
+    // Fora do horário configurado pra IA responder — só salva, não responde
     const body = extractBody(data);
     if (body) await recordInboundMessage({ workspaceId: ws.id, conversationId: conversation.id, body });
     return;

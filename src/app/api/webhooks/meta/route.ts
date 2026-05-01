@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { extractMetaMessage } from "@/lib/whatsapp/meta";
-import { isWithinAttendanceHours } from "@/lib/whatsapp/hours";
 import { getOrCreateConversation, recordInboundMessage } from "@/lib/ai/process";
 import { loadAISettings, isWithinBusinessHours } from "@/lib/ai/settings";
 import { enqueueMessage, claimEntry, markDone } from "@/lib/ai/queue";
@@ -100,15 +99,6 @@ async function handleMetaEvent(payload: unknown) {
   const settings = await loadAISettings(ws.id);
 
   if (!isWithinBusinessHours(settings, { start: ws.attendance_start, end: ws.attendance_end })) {
-    await recordInboundMessage({
-      workspaceId: ws.id,
-      conversationId: conversation.id,
-      body: msg.body,
-      type: msg.type,
-    });
-    return;
-  }
-  if (!isWithinAttendanceHours({ start: ws.attendance_start, end: ws.attendance_end }) && !settings.reply_outside_hours) {
     await recordInboundMessage({
       workspaceId: ws.id,
       conversationId: conversation.id,
